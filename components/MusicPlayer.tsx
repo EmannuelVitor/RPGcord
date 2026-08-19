@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronUp, Music2, Pause, Play, Save, Volume2, X } from "lucide-react";
+import { Music2, Pause, Play, Save, Volume2, X } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { CampaignMusic } from "@/lib/types";
 import { parseYouTubeUrl, toYouTubeEmbedUrl } from "@/lib/youtube";
@@ -67,7 +67,7 @@ export function MusicPlayer({ open, music, isGM, onSave, onPlayback, onClose }: 
   const [error, setError] = useState<string>();
   const [ready, setReady] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [position, setPosition] = useState(music.position);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(65);
@@ -189,14 +189,18 @@ export function MusicPlayer({ open, music, isGM, onSave, onPlayback, onClose }: 
 
   return (
     <>
-      {hasMusic && <section className={`music-sync-dock ${collapsed ? "collapsed" : ""}`} aria-label="Música sincronizada">
-        <header><span><Music2 size={15} /><strong>{music.title || "Trilha da campanha"}</strong></span><button onClick={() => setCollapsed((value) => !value)} aria-label={collapsed ? "Expandir player" : "Recolher player"}>{collapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button></header>
-        <div className="youtube-player-host" ref={playerContainerRef} />
-        <div className="sync-player-controls">
-          {!audioEnabled ? <button className="enable-sync-audio" onClick={enableAudio} disabled={!ready}><Volume2 size={15} /> Ativar áudio sincronizado</button> : <>
-            <div><span>{formatTime(position)}</span><input type="range" min="0" max={Math.max(1, duration)} step="1" value={Math.min(position, Math.max(1, duration))} disabled={!isGM} onChange={(event) => { const next = Number(event.target.value); setPosition(next); playerRef.current?.seekTo(next, true); }} onPointerUp={() => isGM && void onPlayback(music.playing, position)} onKeyUp={() => isGM && void onPlayback(music.playing, position)} /><span>{formatTime(duration)}</span></div>
-            <div><button className="sync-play" onClick={() => isGM ? void togglePlayback() : applySharedPlayback(true)} title={isGM ? (music.playing ? "Pausar para todos" : "Tocar para todos") : "Ressincronizar"}>{music.playing ? <Pause size={16} /> : <Play size={16} />}</button><Volume2 size={14} /><input className="volume-slider" type="range" min="0" max="100" value={volume} onChange={(event) => { const next = Number(event.target.value); setVolume(next); playerRef.current?.setVolume(next); }} /><small>{music.playing ? "Sincronizada" : "Pausada"}</small></div>
-          </>}
+      {hasMusic && <section className={"music-floating " + (expanded ? "expanded" : "")} aria-label="Música sincronizada" onMouseEnter={() => setExpanded(true)} onMouseLeave={() => setExpanded(false)}>
+        <button className={"music-orb " + (music.playing ? "is-playing" : "")} onClick={() => setExpanded((value) => !value)} aria-label={expanded ? "Recolher player" : "Abrir player"}>
+          {music.playing ? <Pause size={20} /> : <Music2 size={20} />}<i />
+        </button>
+        <div className="music-mini-panel">
+          <header><span><Music2 size={15} /><strong>{music.title || "Trilha da campanha"}</strong></span><small>{music.playing ? "Tocando para a mesa" : "Pausada"}</small></header>
+          <div className="youtube-player-host hidden-youtube-player" ref={playerContainerRef} />
+          {!audioEnabled ? <button className="enable-sync-audio" onClick={enableAudio} disabled={!ready}><Volume2 size={15} /> Ativar áudio</button> : <div className="mini-player-controls">
+            <div className="mini-track"><span>{formatTime(position)}</span><input type="range" min="0" max={Math.max(1, duration)} step="1" value={Math.min(position, Math.max(1, duration))} disabled={!isGM} onChange={(event) => { const nextPosition = Number(event.target.value); setPosition(nextPosition); playerRef.current?.seekTo(nextPosition, true); }} onPointerUp={() => isGM && void onPlayback(music.playing, position)} /><span>{formatTime(duration)}</span></div>
+            <div className="mini-actions"><button className="sync-play" onClick={() => isGM ? void togglePlayback() : applySharedPlayback(true)}>{music.playing ? <Pause size={16} /> : <Play size={16} />}</button><Volume2 size={14} /><input className="volume-slider" type="range" min="0" max="100" value={volume} onChange={(event) => { const nextVolume = Number(event.target.value); setVolume(nextVolume); playerRef.current?.setVolume(nextVolume); }} />
+            </div>
+          </div>}
         </div>
       </section>}
 

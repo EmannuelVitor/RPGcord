@@ -33,6 +33,33 @@ export type Character = {
   skills: string[];
   inventory: string;
   imageUrl?: string;
+  customFields?: Record<string, SheetFieldValue>;
+};
+
+export type SheetCategory = "attributes" | "skills" | "abilities" | "inventory";
+export type SheetFieldType = "text" | "number" | "status" | "checkbox" | "counter" | "richtext";
+export type SheetStatusValue = { current: number; max: number };
+export type SheetFieldValue = string | number | boolean | SheetStatusValue;
+
+export type SheetFieldDefinition = {
+  id: string;
+  category: SheetCategory;
+  label: string;
+  type: SheetFieldType;
+  placeholder?: string;
+  formula?: string;
+  defaultValue?: string | number | boolean;
+  defaultMax?: number;
+  min?: number;
+  max?: number;
+};
+
+export type SheetTemplate = {
+  id: string;
+  name: string;
+  version: number;
+  fields: SheetFieldDefinition[];
+  updatedAt?: number;
 };
 
 export type DiceValidationMode = "highest" | "lowest" | "sum";
@@ -78,7 +105,9 @@ export type LightSource = {
   name: string;
   x: number;
   y: number;
-  radius: number;
+  radius?: number;
+  brightRadius?: number;
+  dimRadius?: number;
   intensity: number;
   color: string;
   enabled: boolean;

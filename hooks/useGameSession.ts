@@ -15,7 +15,8 @@ import {
 } from "firebase/firestore";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { db, isFirebaseConfigured } from "@/lib/firebase";
-import type { AppUser, CampaignJournal, CampaignMusic, Character, ChatMessage, DiceRoll, DiceValidationMode, MapToken, Scene } from "@/lib/types";
+import { DEFAULT_SHEET_TEMPLATE, normalizeSheetTemplate } from "@/lib/sheet-template";
+import type { AppUser, CampaignJournal, CampaignMusic, Character, ChatMessage, DiceRoll, DiceValidationMode, LightSource, MapToken, Scene, SheetTemplate } from "@/lib/types";
 
 function blankCharacter(user: AppUser): Character {
   return {
@@ -50,6 +51,15 @@ const initialScene: Scene = {
 const initialJournal: CampaignJournal = { content: "" };
 const initialMusic: CampaignMusic = { youtubeUrl: "", title: "", loop: false, playing: false, position: 0 };
 
+function normalizeLight(light: LightSource): LightSource {
+  const dimRadius = Math.max(3, Math.min(45, light.dimRadius ?? light.radius ?? 16));
+  return {
+    ...light,
+    brightRadius: Math.max(1, Math.min(dimRadius, light.brightRadius ?? dimRadius * .55)),
+    dimRadius,
+  };
+}
+
 export function useGameSession(campaignId: string, user: AppUser) {
   const [character, setCharacter] = useState<Character>(() => blankCharacter(user));
   const [hasCharacter, setHasCharacter] = useState(false);
@@ -59,6 +69,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
   const [scene, setScene] = useState<Scene>(initialScene);
   const [journal, setJournal] = useState<CampaignJournal>(initialJournal);
   const [music, setMusic] = useState<CampaignMusic>(initialMusic);
+  const [sheetTemplate, setSheetTemplate] = useState<SheetTemplate>(DEFAULT_SHEET_TEMPLATE);
   const [gmId, setGmId] = useState("");
   const [syncError, setSyncError] = useState<string>();
   const online = isFirebaseConfigured && Boolean(db);
@@ -72,14 +83,18 @@ export function useGameSession(campaignId: string, user: AppUser) {
     setScene(initialScene);
     setJournal(initialJournal);
     setMusic(initialMusic);
+    setSheetTemplate(DEFAULT_SHEET_TEMPLATE);
     setSyncError(undefined);
     if (!online || !db || !campaignId || !user.id) return;
 
     const unsubscribeCampaign = onSnapshot(
       doc(db, "campaigns", campaignId),
       (snapshot) => {
-        if (!snapshot.exists()) setSyncError("Esta campanha não existe mais.");
-        else setGmId(String(snapshot.data().ownerId ?? ""));
+        if (!snapshot.exists()) { setSyncError("Esta campanha não existe mais."); return; }
+        const campaignData = snapshot.data();
+        setGmId(String(campaignData.ownerId ?? ""));
+        const templateData = campaignData.sheetTemplate as SheetTemplate | undefined;
+        setSheetTemplate(templateData ? normalizeSheetTemplate(templateData) : DEFAULT_SHEET_TEMPLATE);
       },
       () => setSyncError("Sem permissão para acessar esta campanha."),
     );
@@ -117,7 +132,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
         id: snapshot.id,
         ...snapshot.data(),
         revealedAreas: snapshot.data().revealedAreas ?? [],
-        dynamicLights: snapshot.data().dynamicLights ?? [],
+        dynamicLights: (snapshot.data().dynamicLights ?? []).map((light: LightSource) => normalizeLight(light)),
       } as Scene : initialScene),
       () => setSyncError("A cena atual não pôde ser sincronizada."),
     );
@@ -254,6 +269,21 @@ export function useGameSession(campaignId: string, user: AppUser) {
     });
   }, [saveScene, scene]);
 
+  const createLight = useCallback(async (light: LightSource) => {
+    await saveScene({ ...scene, dynamicLights: [...(scene.dynamicLights ?? []), normalizeLight(light)] });
+  }, [saveScene, scene]);
+
+  const updateLight = useCallback(async (light: LightSource) => {
+    await saveScene({
+      ...scene,
+      dynamicLights: (scene.dynamicLights ?? []).map((item) => item.id === light.id ? normalizeLight(light) : item),
+    });
+  }, [saveScene, scene]);
+
+  const deleteLight = useCallback(async (lightId: string) => {
+    await saveScene({ ...scene, dynamicLights: (scene.dynamicLights ?? []).filter((light) => light.id !== lightId) });
+  }, [saveScene, scene]);
+
   const setGlobalVision = useCallback(async (radius: number) => {
     await saveScene({ ...scene, visionRadius: Math.max(3, Math.min(45, radius)) });
   }, [saveScene, scene]);
@@ -291,6 +321,12 @@ export function useGameSession(campaignId: string, user: AppUser) {
     if (online && db) await setDoc(doc(db, "campaigns", campaignId, "journal", "main"), { ...next, updatedAt: serverTimestamp() });
   }, [campaignId, online, user.id, user.name]);
 
+  const saveSheetTemplate = useCallback(async (nextTemplate: SheetTemplate) => {
+    const saved = { ...nextTemplate, id: "current", updatedAt: Date.now() };
+    setSheetTemplate(saved);
+    if (online && db) await setDoc(doc(db, "campaigns", campaignId), { sheetTemplate: { ...saved, updatedAt: serverTimestamp() } }, { merge: true });
+  }, [campaignId, online]);
+
   const saveMusic = useCallback(async (next: CampaignMusic) => {
     const saved = { ...next, position: Math.max(0, next.position || 0), updatedAt: Date.now() };
     setMusic(saved);
@@ -317,7 +353,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
   }, [campaignId, chatMessages, online]);
 
   return useMemo(() => ({
-    character, hasCharacter, rolls, tokens, scene, journal, music, chatMessages, isGM: gmId === user.id, online, syncError,
-    saveCharacter, rollDie, moveToken, addToken, removeToken, saveScene, revealArea, clearRevealed, moveLight, setGlobalVision, setTokenVision, sendChatMessage, clearChat, saveJournal, saveMusic, updateMusicPlayback,
-  }), [addToken, character, chatMessages, clearChat, clearRevealed, gmId, hasCharacter, journal, moveLight, moveToken, music, online, removeToken, revealArea, rollDie, rolls, saveCharacter, saveJournal, saveMusic, saveScene, scene, sendChatMessage, setGlobalVision, setTokenVision, syncError, tokens, updateMusicPlayback, user.id]);
+    character, hasCharacter, rolls, tokens, scene, journal, music, sheetTemplate, chatMessages, isGM: gmId === user.id, online, syncError,
+    saveCharacter, rollDie, moveToken, addToken, removeToken, saveScene, revealArea, clearRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, clearChat, saveJournal, saveSheetTemplate, saveMusic, updateMusicPlayback,
+  }), [addToken, character, chatMessages, clearChat, clearRevealed, createLight, deleteLight, gmId, hasCharacter, journal, moveLight, moveToken, music, online, removeToken, revealArea, rollDie, rolls, saveCharacter, saveJournal, saveMusic, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, sheetTemplate, syncError, tokens, updateLight, updateMusicPlayback, user.id]);
 }

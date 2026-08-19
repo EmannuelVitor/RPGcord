@@ -155,7 +155,7 @@ function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutorial }: {
         )}
 
         <div className="content-grid">
-          <Battlemap scene={game.scene} tokens={game.tokens} userId={user.id} isGM={game.isGM} onMove={game.moveToken} onRevealArea={game.revealArea} onClearRevealed={game.clearRevealed} onMoveLight={game.moveLight} onSetGlobalVision={game.setGlobalVision} onSetTokenVision={game.setTokenVision} />
+          <Battlemap scene={game.scene} tokens={game.tokens} userId={user.id} isGM={game.isGM} onMove={game.moveToken} onRevealArea={game.revealArea} onClearRevealed={game.clearRevealed} onMoveLight={game.moveLight} onCreateLight={game.createLight} onUpdateLight={game.updateLight} onDeleteLight={game.deleteLight} onSetGlobalVision={game.setGlobalVision} onSetTokenVision={game.setTokenVision} />
           <DiceRoller rolls={game.rolls} onRoll={game.rollDie} />
         </div>
 
@@ -171,8 +171,8 @@ function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutorial }: {
         </section>
       </div>
 
-      {sheetOpen && <CharacterSheet campaignId={campaign.id} character={game.character} onSave={game.saveCharacter} onClose={() => setSheetOpen(false)} />}
-      {gmOpen && game.isGM && <GameMasterPanel scene={game.scene} tokens={game.tokens} ownerId={user.id} onSaveScene={game.saveScene} onAddToken={game.addToken} onRemoveToken={game.removeToken} onClose={() => setGmOpen(false)} />}
+      {sheetOpen && <CharacterSheet campaignId={campaign.id} character={game.character} template={game.sheetTemplate} onSave={game.saveCharacter} onClose={() => setSheetOpen(false)} />}
+      {gmOpen && game.isGM && <GameMasterPanel scene={game.scene} tokens={game.tokens} sheetTemplate={game.sheetTemplate} ownerId={user.id} onSaveScene={game.saveScene} onSaveSheetTemplate={game.saveSheetTemplate} onAddToken={game.addToken} onRemoveToken={game.removeToken} onClose={() => setGmOpen(false)} />}
       {inviteOpen && game.isGM && <InviteDialog campaign={campaign} onClose={() => setInviteOpen(false)} />}
       {chatOpen && <SessionChat campaignId={campaign.id} user={user} messages={game.chatMessages} isGM={game.isGM} onSend={game.sendChatMessage} onClear={game.clearChat} onClose={() => setChatOpen(false)} />}
       {journalOpen && <CampaignJournal journal={game.journal} isGM={game.isGM} onSave={game.saveJournal} onClose={() => setJournalOpen(false)} />}

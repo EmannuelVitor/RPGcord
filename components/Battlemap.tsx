@@ -1,293 +1,133 @@
 "use client";
 
-import { Eraser, Eye, Grid3X3, Lightbulb, Minus, Plus, RotateCcw, SlidersHorizontal, Sun, Users, X } from "lucide-react";
-import { PointerEvent, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { MapToken, Scene } from "@/lib/types";
+import { Eraser, Eye, Grid3X3, Lightbulb, Minus, Plus, RotateCcw, SlidersHorizontal, Sun, Trash2, Users, X } from "lucide-react";
+import { FormEvent, MouseEvent as ReactMouseEvent, PointerEvent, WheelEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import type { LightSource, MapToken, Scene } from "@/lib/types";
 
 type Props = {
-  scene: Scene;
-  tokens: MapToken[];
-  userId: string;
-  isGM: boolean;
-  onMove: (tokenId: string, x: number, y: number) => void;
-  onRevealArea: (x: number, y: number) => void;
-  onClearRevealed: () => void;
-  onMoveLight: (lightId: string, x: number, y: number) => void;
-  onSetGlobalVision: (radius: number) => void;
-  onSetTokenVision: (tokenId: string, radius?: number) => void;
+  scene: Scene; tokens: MapToken[]; userId: string; isGM: boolean;
+  onMove: (id: string, x: number, y: number) => void;
+  onRevealArea: (x: number, y: number) => void; onClearRevealed: () => void;
+  onMoveLight: (id: string, x: number, y: number) => void;
+  onCreateLight: (light: LightSource) => void; onUpdateLight: (light: LightSource) => void; onDeleteLight: (id: string) => void;
+  onSetGlobalVision: (radius: number) => void; onSetTokenVision: (id: string, radius?: number) => void;
 };
+type LightEditor = { mode: "create" | "edit"; light: LightSource; left: number; top: number };
+const dim = (light: LightSource) => Math.max(3, light.dimRadius ?? light.radius ?? 16);
+const bright = (light: LightSource) => Math.max(1, Math.min(dim(light), light.brightRadius ?? dim(light) * .5));
 
-export function Battlemap({ scene, tokens, userId, isGM, onMove, onRevealArea, onClearRevealed, onMoveLight, onSetGlobalVision, onSetTokenVision }: Props) {
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<HTMLDivElement>(null);
-  const fogMaskId = `fog-${useId().replace(/:/g, "")}`;
-  const fogTextureId = `fog-texture-${useId().replace(/:/g, "")}`;
-  const visionGradientId = `vision-${useId().replace(/:/g, "")}`;
-  const [zoom, setZoom] = useState(1);
-  const [showGrid, setShowGrid] = useState(true);
-  const [revealMode, setRevealMode] = useState(false);
-  const [drag, setDrag] = useState<{ id: string; x: number; y: number }>();
-  const [lightDrag, setLightDrag] = useState<{ id: string; x: number; y: number }>();
-  const [visionControlsOpen, setVisionControlsOpen] = useState(false);
-  const [selectedVisionTokenId, setSelectedVisionTokenId] = useState<string>();
-  const [globalVisionDraft, setGlobalVisionDraft] = useState(scene.visionRadius ?? 14);
-  const [individualVisionDraft, setIndividualVisionDraft] = useState(scene.visionRadius ?? 14);
-  const [viewportSize, setViewportSize] = useState({ width: 900, height: 520 });
-  const [imageSize, setImageSize] = useState({ width: 16, height: 9 });
+export function Battlemap(props: Props) {
+  const { scene, tokens, userId, isGM, onMove, onRevealArea, onClearRevealed, onMoveLight, onCreateLight, onUpdateLight, onDeleteLight, onSetGlobalVision, onSetTokenVision } = props;
+  const viewportRef = useRef<HTMLDivElement>(null), scrollRef = useRef<HTMLDivElement>(null), mapRef = useRef<HTMLDivElement>(null);
+  const fogId = "fog-" + useId().replace(/:/g, ""), visionId = "vision-" + useId().replace(/:/g, "");
+  const [zoom, setZoom] = useState(1), zoomRef = useRef(1), zoomTarget = useRef(1), zoomFrame = useRef<number | undefined>(undefined);
+  const [showGrid, setShowGrid] = useState(true), [revealMode, setRevealMode] = useState(false), [lightMode, setLightMode] = useState(false);
+  const [drag, setDrag] = useState<{ id: string; x: number; y: number }>(), [lightDrag, setLightDrag] = useState<{ id: string; x: number; y: number }>();
+  const [editor, setEditor] = useState<LightEditor>(), [panning, setPanning] = useState(false);
+  const pan = useRef<{ id: number; x: number; y: number; left: number; top: number } | undefined>(undefined), panMoved = useRef(false), lightMoved = useRef(false);
+  const [visionOpen, setVisionOpen] = useState(false), [selectedToken, setSelectedToken] = useState<string>();
+  const [globalVision, setGlobalVision] = useState(scene.visionRadius ?? 14), [individualVision, setIndividualVision] = useState(scene.visionRadius ?? 14);
+  const [viewport, setViewport] = useState({ width: 900, height: 520 }), [image, setImage] = useState({ width: 16, height: 9 });
 
   useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const measure = () => setViewportSize({ width: Math.max(1, viewport.clientWidth), height: Math.max(1, viewport.clientHeight) });
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(viewport);
-    return () => observer.disconnect();
+    const node = viewportRef.current; if (!node) return;
+    const measure = () => setViewport({ width: Math.max(1, node.clientWidth), height: Math.max(1, node.clientHeight) });
+    measure(); const observer = new ResizeObserver(measure); observer.observe(node); return () => observer.disconnect();
   }, []);
-
   useEffect(() => {
-    setZoom(1);
+    if (zoomFrame.current) cancelAnimationFrame(zoomFrame.current);
+    zoomRef.current = zoomTarget.current = 1; setZoom(1);
+    requestAnimationFrame(() => { const s = scrollRef.current; if (s) s.scrollTo((s.scrollWidth - s.clientWidth) / 2, (s.scrollHeight - s.clientHeight) / 2); });
   }, [scene.mapUrl, scene.mapFit]);
+  useEffect(() => () => { if (zoomFrame.current) cancelAnimationFrame(zoomFrame.current); }, []);
+  useEffect(() => setGlobalVision(scene.visionRadius ?? 14), [scene.visionRadius]);
+  useEffect(() => { const token = tokens.find((item) => item.id === selectedToken); setIndividualVision(token?.visionRadius ?? scene.visionRadius ?? 14); }, [tokens, selectedToken, scene.visionRadius]);
 
-  useEffect(() => {
-    setGlobalVisionDraft(scene.visionRadius ?? 14);
-  }, [scene.visionRadius]);
-
-  useEffect(() => {
-    const selected = tokens.find((token) => token.id === selectedVisionTokenId);
-    setIndividualVisionDraft(selected?.visionRadius ?? scene.visionRadius ?? 14);
-  }, [scene.visionRadius, selectedVisionTokenId, tokens]);
-
-  function positionFromEvent(event: PointerEvent) {
-    const rect = mapRef.current?.getBoundingClientRect();
-    if (!rect) return { x: 0, y: 0 };
-    return {
-      x: Math.max(3, Math.min(97, ((event.clientX - rect.left) / rect.width) * 100)),
-      y: Math.max(5, Math.min(95, ((event.clientY - rect.top) / rect.height) * 100)),
+  function point(event: { clientX: number; clientY: number }) {
+    const rect = mapRef.current?.getBoundingClientRect(); if (!rect) return { x: 50, y: 50 };
+    return { x: Math.max(3, Math.min(97, (event.clientX - rect.left) / rect.width * 100)), y: Math.max(5, Math.min(95, (event.clientY - rect.top) / rect.height * 100)) };
+  }
+  function changeZoom(target: number, x?: number, y?: number) {
+    const scroller = scrollRef.current, map = mapRef.current; if (!scroller || !map) return;
+    const end = Math.max(.5, Math.min(3, target)); zoomTarget.current = end;
+    if (zoomFrame.current) cancelAnimationFrame(zoomFrame.current);
+    const start = zoomRef.current, time = performance.now(), before = map.getBoundingClientRect();
+    const focusX = x ?? before.left + before.width / 2, focusY = y ?? before.top + before.height / 2;
+    const mapX = Math.max(0, Math.min(1, (focusX - before.left) / before.width)), mapY = Math.max(0, Math.min(1, (focusY - before.top) / before.height));
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - time) / 190), ease = 1 - Math.pow(1 - progress, 3), value = start + (end - start) * ease;
+      flushSync(() => { zoomRef.current = value; setZoom(value); });
+      const rect = map.getBoundingClientRect(); scroller.scrollLeft += rect.left + rect.width * mapX - focusX; scroller.scrollTop += rect.top + rect.height * mapY - focusY;
+      if (progress < 1) zoomFrame.current = requestAnimationFrame(tick);
     };
+    zoomFrame.current = requestAnimationFrame(tick);
+  }
+  function wheel(event: WheelEvent<HTMLDivElement>) { event.preventDefault(); changeZoom(zoomTarget.current * Math.exp(-event.deltaY * .0015), event.clientX, event.clientY); }
+  function panStart(event: PointerEvent<HTMLDivElement>) {
+    if (revealMode || lightMode || (event.target as HTMLElement).closest("button,input,textarea,select")) return;
+    const s = scrollRef.current; if (!s || ![0, 1, 2].includes(event.button)) return;
+    event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); panMoved.current = false;
+    pan.current = { id: event.pointerId, x: event.clientX, y: event.clientY, left: s.scrollLeft, top: s.scrollTop }; setPanning(true);
+  }
+  function panMove(event: PointerEvent<HTMLDivElement>) {
+    const start = pan.current, s = scrollRef.current; if (!start || !s || start.id !== event.pointerId) return;
+    const dx = event.clientX - start.x, dy = event.clientY - start.y; if (Math.abs(dx) + Math.abs(dy) > 3) panMoved.current = true;
+    s.scrollLeft = start.left - dx; s.scrollTop = start.top - dy;
+  }
+  function panEnd(event: PointerEvent<HTMLDivElement>) { if (pan.current?.id !== event.pointerId) return; pan.current = undefined; setPanning(false); setTimeout(() => { panMoved.current = false; }, 0); }
+
+  function tokenStart(event: PointerEvent<HTMLButtonElement>, token: MapToken) {
+    if (!isGM && token.ownerId !== userId) return; event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId); setDrag({ id: token.id, ...point(event) });
+  }
+  function tokenEnd(event: PointerEvent<HTMLButtonElement>) { if (!drag) return; event.stopPropagation(); const p = point(event); onMove(drag.id, p.x, p.y); setDrag(undefined); }
+  function lightStart(event: PointerEvent<HTMLButtonElement>, id: string) { event.stopPropagation(); lightMoved.current = false; event.currentTarget.setPointerCapture(event.pointerId); setLightDrag({ id, ...point(event) }); }
+  function lightEnd(event: PointerEvent<HTMLButtonElement>) { if (!lightDrag) return; event.stopPropagation(); const p = point(event); if (lightMoved.current) onMoveLight(lightDrag.id, p.x, p.y); setLightDrag(undefined); }
+  function popover(x: number, y: number) {
+    const rect = viewportRef.current?.getBoundingClientRect(); if (!rect) return { left: 8, top: 55 };
+    return { left: Math.max(8, Math.min(rect.width - 328, x - rect.left + 12)), top: Math.max(54, Math.min(rect.height - 335, y - rect.top + 12)) };
+  }
+  function editLight(event: ReactMouseEvent<HTMLButtonElement>, light: LightSource) {
+    if (lightMoved.current) return; event.stopPropagation(); setEditor({ mode: "edit", light: { ...light, brightRadius: bright(light), dimRadius: dim(light) }, ...popover(event.clientX, event.clientY) });
+  }
+  function mapClick(event: PointerEvent<HTMLDivElement>) {
+    if (panMoved.current) return; const p = point(event);
+    if (isGM && lightMode) setEditor({ mode: "create", light: { id: crypto.randomUUID(), name: "Nova luz", ...p, brightRadius: 8, dimRadius: 16, intensity: .85, color: "#ffd27a", enabled: true }, ...popover(event.clientX, event.clientY) });
+    else if (isGM && scene.fogEnabled && revealMode) onRevealArea(p.x, p.y);
+  }
+  function saveLight(event: FormEvent) {
+    event.preventDefault(); if (!editor) return;
+    const light = { ...editor.light, dimRadius: dim(editor.light), brightRadius: bright(editor.light) };
+    editor.mode === "create" ? onCreateLight(light) : onUpdateLight(light); setEditor(undefined); setLightMode(false);
   }
 
-  function startDrag(event: PointerEvent<HTMLButtonElement>, token: MapToken) {
-    if (!isGM && token.ownerId !== userId) return;
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setDrag({ id: token.id, ...positionFromEvent(event) });
-  }
-
-  function updateDrag(event: PointerEvent<HTMLButtonElement>) {
-    if (!drag) return;
-    setDrag({ id: drag.id, ...positionFromEvent(event) });
-  }
-
-  function endDrag(event: PointerEvent<HTMLButtonElement>) {
-    if (!drag) return;
-    event.stopPropagation();
-    const next = positionFromEvent(event);
-    onMove(drag.id, next.x, next.y);
-    setDrag(undefined);
-  }
-
-  function startLightDrag(event: PointerEvent<HTMLButtonElement>, lightId: string) {
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setLightDrag({ id: lightId, ...positionFromEvent(event) });
-  }
-
-  function updateLightDrag(event: PointerEvent<HTMLButtonElement>) {
-    if (!lightDrag) return;
-    setLightDrag({ id: lightDrag.id, ...positionFromEvent(event) });
-  }
-
-  function endLightDrag(event: PointerEvent<HTMLButtonElement>) {
-    if (!lightDrag) return;
-    event.stopPropagation();
-    const next = positionFromEvent(event);
-    onMoveLight(lightDrag.id, next.x, next.y);
-    setLightDrag(undefined);
-  }
-
-  function revealFromEvent(event: PointerEvent<HTMLDivElement>) {
-    if (!isGM || !scene.fogEnabled || !revealMode) return;
-    const point = positionFromEvent(event);
-    onRevealArea(point.x, point.y);
-  }
-
-  const visionRadius = scene.visionRadius ?? 14;
-  const revealedAreas = scene.revealedAreas ?? [];
-  const dynamicLights = scene.dynamicLights ?? [];
+  const lights = scene.dynamicLights ?? [], vision = scene.visionRadius ?? 14;
   const mapSize = useMemo(() => {
-    if (!scene.mapUrl || scene.mapFit === "stretch") {
-      return { width: viewportSize.width * zoom, height: viewportSize.height * zoom };
-    }
-    const fitScale = scene.mapFit === "cover"
-      ? Math.max(viewportSize.width / imageSize.width, viewportSize.height / imageSize.height)
-      : Math.min(viewportSize.width / imageSize.width, viewportSize.height / imageSize.height);
-    return {
-      width: Math.max(1, imageSize.width * fitScale * zoom),
-      height: Math.max(1, imageSize.height * fitScale * zoom),
-    };
-  }, [imageSize.height, imageSize.width, scene.mapFit, scene.mapUrl, viewportSize.height, viewportSize.width, zoom]);
-  const stageSize = {
-    width: Math.max(viewportSize.width, mapSize.width),
-    height: Math.max(viewportSize.height, mapSize.height),
-  };
+    if (!scene.mapUrl || scene.mapFit === "stretch") return { width: viewport.width * zoom, height: viewport.height * zoom };
+    const fit = scene.mapFit === "cover" ? Math.max(viewport.width / image.width, viewport.height / image.height) : Math.min(viewport.width / image.width, viewport.height / image.height);
+    return { width: image.width * fit * zoom, height: image.height * fit * zoom };
+  }, [scene.mapUrl, scene.mapFit, viewport, image, zoom]);
+  const stage = { width: Math.max(viewport.width, mapSize.width), height: Math.max(viewport.height, mapSize.height) };
 
-  useEffect(() => {
-    const scroller = scrollRef.current;
-    if (!scroller) return;
-    const frame = window.requestAnimationFrame(() => {
-      scroller.scrollTo({
-        left: Math.max(0, (stageSize.width - scroller.clientWidth) / 2),
-        top: Math.max(0, (stageSize.height - scroller.clientHeight) / 2),
-        behavior: "smooth",
-      });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [stageSize.height, stageSize.width]);
-
-  return (
-    <section className="map-card panel">
-      <header className="panel-header map-header">
-        <div>
-          <p className="eyebrow">Cena ativa</p>
-          <h2>{scene.name}</h2>
-        </div>
-        <div className="map-meta">
-          <span><Users size={15} /> {tokens.filter((token) => token.kind === "hero").length} aventureiros</span>
-          <span className="live-dot"><i /> sincronizado</span>
-        </div>
-      </header>
-
-      <div className="map-viewport" ref={viewportRef}>
-        <div className="map-scroll" ref={scrollRef}>
-          <div className="map-stage" style={{ width: stageSize.width, height: stageSize.height }}>
-          <div
-            ref={mapRef}
-            className={`battle-map ${showGrid ? "has-grid" : ""} ${scene.mapUrl ? "has-image" : ""} ${revealMode ? "reveal-mode" : ""}`}
-            onPointerUp={revealFromEvent}
-            style={{
-              width: mapSize.width,
-              height: mapSize.height,
-              "--grid-size": `${Math.max(8, scene.gridSize * zoom)}px`,
-            } as React.CSSProperties}
-          >
-          {scene.mapUrl && <img
-            className="map-image"
-            src={scene.mapUrl}
-            alt="Mapa da cena"
-            draggable={false}
-            onLoad={(event) => setImageSize({ width: event.currentTarget.naturalWidth || 16, height: event.currentTarget.naturalHeight || 9 })}
-          />}
-          {!scene.mapUrl && (
-            <div className="demo-terrain" aria-hidden="true">
-              <span className="ruin ruin-one" /><span className="ruin ruin-two" />
-              <span className="pool" /><span className="trail" />
-              <span className="tree-cluster trees-one">♠ ♠ ♠</span>
-              <span className="tree-cluster trees-two">♠ ♠</span>
-              <span className="compass">N<span>✦</span></span>
-            </div>
-          )}
-          {dynamicLights.some((light) => light.enabled) && <svg className="light-glows" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            <defs>{dynamicLights.filter((light) => light.enabled).map((light) => <radialGradient id={`glow-${light.id}`} key={light.id}><stop offset="0%" stopColor={light.color} stopOpacity={Math.min(.7, light.intensity * .65)} /><stop offset="55%" stopColor={light.color} stopOpacity={light.intensity * .22} /><stop offset="100%" stopColor={light.color} stopOpacity="0" /></radialGradient>)}</defs>
-            {dynamicLights.filter((light) => light.enabled).map((light) => {
-              const position = lightDrag?.id === light.id ? lightDrag : light;
-              return <circle key={light.id} cx={position.x} cy={position.y} r={light.radius} fill={`url(#glow-${light.id})`} />;
-            })}
-          </svg>}
-          {tokens.map((token) => {
-            const display = drag?.id === token.id ? drag : token;
-            const canMove = isGM || token.ownerId === userId;
-            return (
-              <button
-                className={`map-token ${token.kind} ${drag?.id === token.id ? "dragging" : ""}`}
-                key={token.id}
-                style={{ left: `${display.x}%`, top: `${display.y}%`, "--token-color": token.color } as React.CSSProperties}
-                onPointerDown={(event) => startDrag(event, token)}
-                onPointerMove={updateDrag}
-                onPointerUp={endDrag}
-                onClick={(event) => {
-                  if (isGM && token.kind === "hero") {
-                    event.stopPropagation();
-                    setSelectedVisionTokenId(token.id);
-                    setVisionControlsOpen(true);
-                  }
-                }}
-                title={`${token.name}${canMove ? " — arraste para mover" : ""}`}
-                aria-label={token.name}
-              >
-                {token.imageUrl ? <img src={token.imageUrl} alt="" draggable={false} /> : token.initials}
-                <span>{token.name}</span>
-              </button>
-            );
-          })}
-          {scene.fogEnabled && (
-            <svg className={`fog-of-war ${isGM ? "gm-fog" : ""}`} viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              <defs>
-                <radialGradient id={visionGradientId}><stop offset="0%" stopColor="#000" /><stop offset="58%" stopColor="#000" /><stop offset="82%" stopColor="#777" /><stop offset="100%" stopColor="#fff" /></radialGradient>
-                {dynamicLights.filter((light) => light.enabled).map((light) => {
-                  const centerShade = Math.round(255 * (1 - light.intensity));
-                  return <radialGradient id={`light-mask-${light.id}`} key={light.id}><stop offset="0%" stopColor={`rgb(${centerShade},${centerShade},${centerShade})`} /><stop offset="55%" stopColor={`rgb(${centerShade},${centerShade},${centerShade})`} /><stop offset="82%" stopColor="#777" /><stop offset="100%" stopColor="#fff" /></radialGradient>;
-                })}
-                <mask id={fogMaskId} maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100" style={{ maskType: "luminance" }}>
-                  <rect className="fog-mask-base" width="100" height="100" fill="#fff" />
-                  {tokens.filter((token) => token.kind === "hero").map((token) => {
-                    const display = drag?.id === token.id ? drag : token;
-                    return <circle key={`hero-${token.id}`} cx={display.x} cy={display.y} r={token.visionRadius ?? visionRadius} fill={`url(#${visionGradientId})`} />;
-                  })}
-                  {revealedAreas.map((area) => <circle key={area.id} cx={area.x} cy={area.y} r={area.radius} fill={`url(#${visionGradientId})`} />)}
-                  {dynamicLights.filter((light) => light.enabled).map((light) => {
-                    const position = lightDrag?.id === light.id ? lightDrag : light;
-                    return <circle key={`light-${light.id}`} cx={position.x} cy={position.y} r={light.radius} fill={`url(#light-mask-${light.id})`} />;
-                  })}
-                </mask>
-                <filter id={fogTextureId} x="0" y="0" width="100%" height="100%">
-                  <feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="17" />
-                  <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 .32 0" />
-                </filter>
-              </defs>
-              <rect className="fog-overlay" width="100" height="100" mask={`url(#${fogMaskId})`} />
-              <rect className="fog-texture" width="100" height="100" mask={`url(#${fogMaskId})`} filter={`url(#${fogTextureId})`} />
-            </svg>
-          )}
-          {isGM && dynamicLights.map((light) => {
-            const position = lightDrag?.id === light.id ? lightDrag : light;
-            return <button
-              className={`map-light-marker ${light.enabled ? "enabled" : "disabled"}`}
-              key={`marker-${light.id}`}
-              style={{ left: `${position.x}%`, top: `${position.y}%`, "--light-color": light.color } as React.CSSProperties}
-              onPointerDown={(event) => startLightDrag(event, light.id)}
-              onPointerMove={updateLightDrag}
-              onPointerUp={endLightDrag}
-              title={`${light.name} — arraste para mover`}
-              aria-label={light.name}
-            ><Lightbulb size={14} /><span>{light.name}</span></button>;
-          })}
-          </div>
-          </div>
-        </div>
-
-        <div className="map-tools" aria-label="Controles do mapa">
-          <button onClick={() => setZoom((value) => Math.max(.5, Number((value - .1).toFixed(1))))} aria-label="Diminuir zoom"><Minus size={17} /></button>
-          <span>{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom((value) => Math.min(3, Number((value + .1).toFixed(1))))} aria-label="Aumentar zoom"><Plus size={17} /></button>
-          <i />
-          <button className={showGrid ? "active" : ""} onClick={() => setShowGrid((value) => !value)} aria-label="Alternar grade"><Grid3X3 size={17} /></button>
-          <button onClick={() => setZoom(1)} aria-label="Restaurar visualização"><RotateCcw size={16} /></button>
-          {isGM && scene.fogEnabled && <><i /><button className={revealMode ? "active reveal-active" : ""} onClick={() => setRevealMode((value) => !value)} aria-label="Revelar uma área" title="Revelar uma área"><Sun size={17} /></button><button onClick={onClearRevealed} aria-label="Apagar áreas reveladas" title="Apagar áreas reveladas"><Eraser size={16} /></button></>}
-          {isGM && scene.fogEnabled && <button className={visionControlsOpen ? "active" : ""} onClick={() => setVisionControlsOpen((value) => !value)} aria-label="Controlar visão dos jogadores" title="Controlar visão dos jogadores"><SlidersHorizontal size={16} /></button>}
-        </div>
-        {isGM && scene.fogEnabled && visionControlsOpen && <div className="fog-live-controls">
-          <header><div><SlidersHorizontal size={15} /><strong>Visão em tempo real</strong></div><button onClick={() => setVisionControlsOpen(false)} aria-label="Fechar controles"><X size={15} /></button></header>
-          <label><span>Todos os jogadores <b>{globalVisionDraft}%</b></span><input type="range" min="3" max="45" value={globalVisionDraft} onChange={(event) => setGlobalVisionDraft(Number(event.target.value))} onPointerUp={() => onSetGlobalVision(globalVisionDraft)} onKeyUp={() => onSetGlobalVision(globalVisionDraft)} /></label>
-          {selectedVisionTokenId ? (() => {
-            const selected = tokens.find((token) => token.id === selectedVisionTokenId && token.kind === "hero");
-            if (!selected) return null;
-            return <div className="individual-vision"><p><span className="mini-token" style={{ background: selected.color }}>{selected.initials}</span><strong>{selected.name}</strong><button onClick={() => { setIndividualVisionDraft(globalVisionDraft); onSetTokenVision(selected.id, undefined); }}>Usar global</button></p><label><span>Visão individual <b>{individualVisionDraft}%</b></span><input type="range" min="3" max="45" value={individualVisionDraft} onChange={(event) => setIndividualVisionDraft(Number(event.target.value))} onPointerUp={() => onSetTokenVision(selected.id, individualVisionDraft)} onKeyUp={() => onSetTokenVision(selected.id, individualVisionDraft)} /></label></div>;
-          })() : <p className="select-token-hint">Clique no pino de um jogador para ajustar apenas a visão dele.</p>}
-        </div>}
-        <div className="map-hint">{revealMode ? <><Sun size={14} /> Clique no mapa para revelar uma área</> : <><Eye size={14} /> Arraste seu pino para se mover</>}</div>
+  return <section className="map-card panel">
+    <header className="panel-header map-header"><div><p className="eyebrow">Cena ativa</p><h2>{scene.name}</h2></div><div className="map-meta"><span><Users size={15} /> {tokens.filter((token) => token.kind === "hero").length} aventureiros</span><span className="live-dot"><i /> sincronizado</span></div></header>
+    <div className="map-viewport" ref={viewportRef}>
+      <div className={"map-scroll " + (panning ? "is-panning" : "")} ref={scrollRef} onWheel={wheel} onPointerDown={panStart} onPointerMove={panMove} onPointerUp={panEnd} onPointerCancel={panEnd} onContextMenu={(event) => event.preventDefault()}>
+        <div className="map-stage" style={stage}><div ref={mapRef} className={"battle-map " + (showGrid ? "has-grid " : "") + (revealMode ? "reveal-mode " : "") + (lightMode ? "light-placement-mode" : "")} onPointerUp={mapClick} style={{ ...mapSize, "--grid-size": Math.max(8, scene.gridSize * zoom) + "px" } as React.CSSProperties}>
+          {scene.mapUrl ? <img className="map-image" src={scene.mapUrl} alt="Mapa da cena" draggable={false} onLoad={(event) => setImage({ width: event.currentTarget.naturalWidth || 16, height: event.currentTarget.naturalHeight || 9 })} /> : <div className="demo-terrain" />}
+          {lights.some((light) => light.enabled) && <svg className="light-glows" viewBox="0 0 100 100" preserveAspectRatio="none"><defs>{lights.filter((light) => light.enabled).map((light) => <radialGradient id={"glow-" + light.id} key={light.id}><stop offset="0%" stopColor={light.color} stopOpacity={light.intensity * .75} /><stop offset={bright(light) / dim(light) * 100 + "%"} stopColor={light.color} stopOpacity={light.intensity * .45} /><stop offset="100%" stopColor={light.color} stopOpacity="0" /></radialGradient>)}</defs>{lights.filter((light) => light.enabled).map((light) => { const p = lightDrag?.id === light.id ? lightDrag : light; return <circle key={light.id} cx={p.x} cy={p.y} r={dim(light)} fill={"url(#glow-" + light.id + ")"} />; })}</svg>}
+          {tokens.map((token) => { const p = drag?.id === token.id ? drag : token; return <button className={"map-token " + token.kind + (drag?.id === token.id ? " dragging" : "")} key={token.id} style={{ left: p.x + "%", top: p.y + "%", "--token-color": token.color } as React.CSSProperties} onPointerDown={(event) => tokenStart(event, token)} onPointerMove={(event) => drag && setDrag({ id: drag.id, ...point(event) })} onPointerUp={tokenEnd} onClick={(event) => { if (isGM && token.kind === "hero") { event.stopPropagation(); setSelectedToken(token.id); setVisionOpen(true); } }} title={token.name}>{token.imageUrl ? <img src={token.imageUrl} alt="" draggable={false} /> : token.initials}<span>{token.name}</span></button>; })}
+          {scene.fogEnabled && <svg className={"fog-of-war " + (isGM ? "gm-fog" : "")} viewBox="0 0 100 100" preserveAspectRatio="none"><defs><radialGradient id={visionId}><stop offset="0%" stopColor="#000" /><stop offset="58%" stopColor="#000" /><stop offset="82%" stopColor="#777" /><stop offset="100%" stopColor="#fff" /></radialGradient>{lights.filter((light) => light.enabled).map((light) => { const shade = Math.round(255 * (1 - light.intensity)); return <radialGradient id={"mask-" + light.id} key={light.id}><stop offset="0%" stopColor={"rgb(" + shade + "," + shade + "," + shade + ")"} /><stop offset={bright(light) / dim(light) * 100 + "%"} stopColor={"rgb(" + shade + "," + shade + "," + shade + ")"} /><stop offset="100%" stopColor="#fff" /></radialGradient>; })}<mask id={fogId}><rect width="100" height="100" fill="#fff" />{tokens.filter((token) => token.kind === "hero").map((token) => { const p = drag?.id === token.id ? drag : token; return <circle key={token.id} cx={p.x} cy={p.y} r={token.visionRadius ?? vision} fill={"url(#" + visionId + ")"} />; })}{(scene.revealedAreas ?? []).map((area) => <circle key={area.id} cx={area.x} cy={area.y} r={area.radius} fill={"url(#" + visionId + ")"} />)}{lights.filter((light) => light.enabled).map((light) => { const p = lightDrag?.id === light.id ? lightDrag : light; return <circle key={light.id} cx={p.x} cy={p.y} r={dim(light)} fill={"url(#mask-" + light.id + ")"} />; })}</mask></defs><rect className="fog-overlay" width="100" height="100" mask={"url(#" + fogId + ")"} /></svg>}
+          {isGM && lights.map((light) => { const p = lightDrag?.id === light.id ? lightDrag : light; return <button className={"map-light-marker " + (light.enabled ? "enabled" : "disabled")} key={light.id} style={{ left: p.x + "%", top: p.y + "%", "--light-color": light.color } as React.CSSProperties} onPointerDown={(event) => lightStart(event, light.id)} onPointerMove={(event) => { if (lightDrag) { lightMoved.current = true; setLightDrag({ id: lightDrag.id, ...point(event) }); } }} onPointerUp={lightEnd} onClick={(event) => editLight(event, light)}><Lightbulb size={14} /><span>{light.name}</span></button>; })}
+        </div></div>
       </div>
-    </section>
-  );
+
+      <div className="map-tools"><button onClick={() => changeZoom(zoomTarget.current - .2)}><Minus size={17} /></button><span>{Math.round(zoom * 100)}%</span><button onClick={() => changeZoom(zoomTarget.current + .2)}><Plus size={17} /></button><i /><button className={showGrid ? "active" : ""} onClick={() => setShowGrid(!showGrid)}><Grid3X3 size={17} /></button><button onClick={() => changeZoom(1)}><RotateCcw size={16} /></button>{isGM && <><i /><button className={lightMode ? "active light-tool-active" : ""} onClick={() => { setLightMode(!lightMode); setRevealMode(false); setEditor(undefined); }} title="Criar ponto de luz"><Lightbulb size={16} /></button></>}{isGM && scene.fogEnabled && <><button className={revealMode ? "active reveal-active" : ""} onClick={() => { setRevealMode(!revealMode); setLightMode(false); }}><Sun size={17} /></button><button onClick={onClearRevealed}><Eraser size={16} /></button><button className={visionOpen ? "active" : ""} onClick={() => setVisionOpen(!visionOpen)}><SlidersHorizontal size={16} /></button></>}</div>
+
+      {editor && <form className="light-config-popover" style={{ left: editor.left, top: editor.top }} onSubmit={saveLight} onPointerDown={(event) => event.stopPropagation()}><header><div><Lightbulb size={16} /><strong>{editor.mode === "create" ? "Confirmar nova luz" : "Editar fonte de luz"}</strong></div><button type="button" onClick={() => setEditor(undefined)}><X size={15} /></button></header><label>Nome<input value={editor.light.name} onChange={(event) => setEditor({ ...editor, light: { ...editor.light, name: event.target.value } })} /></label><div className="light-popover-grid"><label>Luz intensa <b>{Math.round(bright(editor.light))}%</b><input type="range" min="1" max={dim(editor.light)} value={bright(editor.light)} onChange={(event) => setEditor({ ...editor, light: { ...editor.light, brightRadius: Number(event.target.value) } })} /></label><label>Luz difusa <b>{Math.round(dim(editor.light))}%</b><input type="range" min="3" max="45" value={dim(editor.light)} onChange={(event) => setEditor({ ...editor, light: { ...editor.light, dimRadius: Number(event.target.value), brightRadius: Math.min(bright(editor.light), Number(event.target.value)) } })} /></label></div><div className="light-popover-row"><label>Cor<input type="color" value={editor.light.color} onChange={(event) => setEditor({ ...editor, light: { ...editor.light, color: event.target.value } })} /></label><label>Intensidade <b>{Math.round(editor.light.intensity * 100)}%</b><input type="range" min=".1" max="1" step=".05" value={editor.light.intensity} onChange={(event) => setEditor({ ...editor, light: { ...editor.light, intensity: Number(event.target.value) } })} /></label></div><label className="light-popover-enabled"><input type="checkbox" checked={editor.light.enabled} onChange={(event) => setEditor({ ...editor, light: { ...editor.light, enabled: event.target.checked } })} /> Fonte de luz ativa</label><footer>{editor.mode === "edit" && <button className="delete-light" type="button" onClick={() => { onDeleteLight(editor.light.id); setEditor(undefined); }}><Trash2 size={14} /> Excluir</button>}<button className="primary-button">{editor.mode === "create" ? "Fixar no mapa" : "Salvar alterações"}</button></footer></form>}
+
+      {isGM && scene.fogEnabled && visionOpen && <div className="fog-live-controls"><header><div><SlidersHorizontal size={15} /><strong>Visão em tempo real</strong></div><button onClick={() => setVisionOpen(false)}><X size={15} /></button></header><label><span>Todos os jogadores <b>{globalVision}%</b></span><input type="range" min="3" max="45" value={globalVision} onChange={(event) => setGlobalVision(Number(event.target.value))} onPointerUp={() => onSetGlobalVision(globalVision)} /></label>{selectedToken && (() => { const token = tokens.find((item) => item.id === selectedToken); return token ? <div className="individual-vision"><p><strong>{token.name}</strong><button onClick={() => onSetTokenVision(token.id, undefined)}>Usar global</button></p><label><span>Visão individual <b>{individualVision}%</b></span><input type="range" min="3" max="45" value={individualVision} onChange={(event) => setIndividualVision(Number(event.target.value))} onPointerUp={() => onSetTokenVision(token.id, individualVision)} /></label></div> : null; })()}</div>}
+      <div className="map-hint">{lightMode ? <><Lightbulb size={14} /> Clique no mapa para configurar uma luz</> : revealMode ? <><Sun size={14} /> Clique no mapa para revelar</> : <><Eye size={14} /> Arraste o fundo para mover · roda do mouse para ampliar</>}</div>
+    </div>
+  </section>;
 }

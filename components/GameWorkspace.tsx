@@ -7,6 +7,7 @@ import {
   Dices,
   HelpCircle,
   LogOut,
+  LockKeyhole,
   Map as MapIcon,
   Menu,
   MessageCircle,
@@ -39,9 +40,19 @@ import { PlayerNotes } from "@/components/PlayerNotes";
 import { SessionChat } from "@/components/SessionChat";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { useGameSession } from "@/hooks/useGameSession";
-import type { AppUser, Campaign } from "@/lib/types";
+import type { AppUser, Campaign, CampaignMember } from "@/lib/types";
 
 type PanelKey = "sheet" | "history" | "chat" | "journal" | "notes" | "settings" | "gm";
+type WhisperTabKey = `whisper:${string}`;
+type WorkspaceTabKey = PanelKey | WhisperTabKey;
+
+function isWhisperTab(tab: WorkspaceTabKey): tab is WhisperTabKey {
+  return tab.startsWith("whisper:");
+}
+
+function whisperPartnerId(tab: WhisperTabKey) {
+  return tab.slice("whisper:".length);
+}
 
 const panelLabels: Record<PanelKey, string> = {
   sheet: "Ficha",
@@ -93,8 +104,8 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
   onTutorial: () => void;
 }) {
   const game = useGameSession(campaign.id, user);
-  const [openTabs, setOpenTabs] = useState<PanelKey[]>([]);
-  const [activeTab, setActiveTab] = useState<PanelKey>();
+  const [openTabs, setOpenTabs] = useState<WorkspaceTabKey[]>([]);
+  const [activeTab, setActiveTab] = useState<WorkspaceTabKey>();
   const [panelPinned, setPanelPinned] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -104,7 +115,10 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
   const [participantsOpen, setParticipantsOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [unreadChat, setUnreadChat] = useState(0);
+  const [unreadWhispers, setUnreadWhispers] = useState<Record<string, number>>({});
   const lastMessageRef = useRef<string | undefined>(undefined);
+  const lastWhisperRef = useRef<string | undefined>(undefined);
+  const knownWhisperPartnersRef = useRef<Set<string>>(new Set());
 
   const openPanel = useCallback((panel: PanelKey) => {
     setOpenTabs((current) => current.includes(panel) ? current : [...current, panel]);
@@ -113,7 +127,16 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
     setSidebarOpen(false);
   }, []);
 
-  const closePanel = useCallback((panel: PanelKey) => {
+  const openWhisper = useCallback((partnerId: string) => {
+    const tab = `whisper:${partnerId}` as WhisperTabKey;
+    setOpenTabs((current) => current.includes(tab) ? current : [...current, tab]);
+    setActiveTab(tab);
+    setUnreadWhispers((current) => ({ ...current, [partnerId]: 0 }));
+    knownWhisperPartnersRef.current.add(partnerId);
+    setSidebarOpen(false);
+  }, []);
+
+  const closePanel = useCallback((panel: WorkspaceTabKey) => {
     setOpenTabs((current) => {
       const next = current.filter((item) => item !== panel);
       setActiveTab((active) => active === panel ? next.at(-1) : active);
@@ -121,6 +144,16 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    setOpenTabs([]);
+    setActiveTab(undefined);
+    setUnreadChat(0);
+    setUnreadWhispers({});
+    lastMessageRef.current = undefined;
+    lastWhisperRef.current = undefined;
+    knownWhisperPartnersRef.current = new Set();
+  }, [campaign.id]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("rpgcord.theme");
@@ -148,15 +181,79 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
     }
   }, [activeTab, game.chatMessages, user.id]);
 
+  useEffect(() => {
+    const latest = game.whisperMessages.at(-1);
+    if (!latest) return;
+    const partnerId = latest.userId === user.id ? latest.recipientId : latest.userId;
+    if (!partnerId) return;
+
+    if (!lastWhisperRef.current) {
+      for (const message of game.whisperMessages) {
+        const existingPartnerId = message.userId === user.id ? message.recipientId : message.userId;
+        if (existingPartnerId) knownWhisperPartnersRef.current.add(existingPartnerId);
+      }
+      lastWhisperRef.current = latest.id;
+      if (latest.userId !== user.id && Date.now() - latest.createdAt < 15000) {
+        const tab = `whisper:${partnerId}` as WhisperTabKey;
+        setOpenTabs((current) => current.includes(tab) ? current : [...current, tab]);
+        setActiveTab(tab);
+        playChatNotification();
+      }
+      return;
+    }
+
+    if (latest.id === lastWhisperRef.current) return;
+    lastWhisperRef.current = latest.id;
+    const tab = `whisper:${partnerId}` as WhisperTabKey;
+    const isNewConversation = !knownWhisperPartnersRef.current.has(partnerId);
+    knownWhisperPartnersRef.current.add(partnerId);
+    setOpenTabs((current) => current.includes(tab) ? current : [...current, tab]);
+
+    if (latest.userId !== user.id) {
+      playChatNotification();
+      if (isNewConversation) {
+        setActiveTab(tab);
+        setUnreadWhispers((current) => ({ ...current, [partnerId]: 0 }));
+      } else if (activeTab !== tab) {
+        setUnreadWhispers((current) => ({ ...current, [partnerId]: (current[partnerId] ?? 0) + 1 }));
+      }
+    }
+  }, [activeTab, game.whisperMessages, user.id]);
+
   const characterName = game.character.name.trim() || "Crie sua personagem";
   const hpPercent = game.character.maxHp > 0 ? Math.max(0, Math.min(100, Math.round((game.character.hp / game.character.maxHp) * 100))) : 0;
   const panelOpen = Boolean(activeTab && openTabs.includes(activeTab));
   const onlineCount = game.participants.filter((member) => member.lastSeenAt && Date.now() - member.lastSeenAt < 100000).length;
+  const totalUnread = unreadChat + Object.values(unreadWhispers).reduce((total, count) => total + count, 0);
 
-  function renderPanel(panel: PanelKey) {
+  function getWhisperPartner(partnerId: string): CampaignMember | undefined {
+    const participant = game.participants.find((member) => member.userId === partnerId);
+    if (participant) return participant;
+    const relatedMessage = [...game.whisperMessages].reverse().find((message) => message.userId === partnerId || message.recipientId === partnerId);
+    if (!relatedMessage) return undefined;
+    return {
+      userId: partnerId,
+      name: relatedMessage.userId === partnerId ? relatedMessage.userName : relatedMessage.recipientName ?? "Conversa privada",
+      role: game.isGM ? "player" : "gm",
+    };
+  }
+
+  function getTabLabel(tab: WorkspaceTabKey) {
+    if (!isWhisperTab(tab)) return panelLabels[tab];
+    return getWhisperPartner(whisperPartnerId(tab))?.name ?? "Privado";
+  }
+
+  function renderPanel(panel: WorkspaceTabKey) {
+    if (isWhisperTab(panel)) {
+      const partnerId = whisperPartnerId(panel);
+      const partner = getWhisperPartner(partnerId);
+      if (!partner) return null;
+      const privateMessages = game.whisperMessages.filter((message) => message.participantIds?.includes(partnerId) || message.userId === partnerId || message.recipientId === partnerId);
+      return <SessionChat embedded campaignId={campaign.id} campaignName={campaign.name} user={user} messages={privateMessages} participants={game.participants} privateWith={partner} isGM={game.isGM} onSend={game.sendChatMessage} onClear={game.clearChat} onClose={() => closePanel(panel)} />;
+    }
     if (panel === "sheet") return <CharacterSheet embedded campaignId={campaign.id} character={game.character} template={game.sheetTemplate} onSave={game.saveCharacter} onClose={() => closePanel("sheet")} />;
     if (panel === "history") return <DiceHistoryPanel embedded rolls={game.rolls} onClose={() => closePanel("history")} />;
-    if (panel === "chat") return <SessionChat embedded campaignId={campaign.id} campaignName={campaign.name} user={user} messages={game.chatMessages} participants={game.participants} isGM={game.isGM} onSend={game.sendChatMessage} onClear={game.clearChat} onClose={() => closePanel("chat")} />;
+    if (panel === "chat") return <SessionChat embedded campaignId={campaign.id} campaignName={campaign.name} user={user} messages={game.chatMessages} whispers={game.whisperMessages} participants={game.participants} isGM={game.isGM} onSend={game.sendChatMessage} onOpenWhisper={openWhisper} onClear={game.clearChat} onClose={() => closePanel("chat")} />;
     if (panel === "journal") return <CampaignJournal embedded journal={game.journal} isGM={game.isGM} onSave={game.saveJournal} onClose={() => closePanel("journal")} />;
     if (panel === "notes") return <PlayerNotes embedded notes={game.notes} participants={game.participants} userId={user.id} onSave={game.saveNotes} onClose={() => closePanel("notes")} />;
     if (panel === "settings") return <SettingsPanel embedded theme={theme} onTheme={setTheme} onClose={() => closePanel("settings")} />;
@@ -176,7 +273,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
           <button className="active" onClick={() => setSidebarOpen(false)}><MapIcon /> Mapa da mesa <span>AO VIVO</span></button>
           <button onClick={() => openPanel("sheet")}><ScrollText /> {game.hasCharacter ? "Minha ficha" : "Criar ficha"}</button>
           <button onClick={() => openPanel("history")}><Dices /> Histórico de dados</button>
-          <button onClick={() => openPanel("chat")}><MessageCircle /> Chat da sessão {unreadChat > 0 ? <span>{unreadChat}</span> : null}</button>
+          <button onClick={() => openPanel("chat")}><MessageCircle /> Chat da sessão {totalUnread > 0 ? <span>{totalUnread}</span> : null}</button>
           <button onClick={() => openPanel("journal")}><BookOpen /> Diário da campanha</button>
           <button disabled={!game.hasCharacter} onClick={() => openPanel("notes")}><NotebookPen /> Notas da personagem</button>
           <button onClick={() => { setMusicOpen(true); setSidebarOpen(false); }}><Music2 /> Música da campanha</button>
@@ -198,7 +295,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
           <div className="session-status">
             <span className="online"><Wifi size={14} /> Mesa sincronizada</span>
             <button className="party-stack party-button" onClick={() => setParticipantsOpen((value) => !value)} title="Ver jogadores"><i><Users size={12} /></i><i>{onlineCount}/{Math.max(campaign.memberIds.length, game.participants.length)}</i></button>
-            <button className="outline-button chat-top" onClick={() => openPanel("chat")}><MessageCircle size={16} /> Chat {unreadChat > 0 ? <b>{unreadChat}</b> : null}</button>
+            <button className="outline-button chat-top" onClick={() => openPanel("chat")}><MessageCircle size={16} /> Chat {totalUnread > 0 ? <b>{totalUnread}</b> : null}</button>
             <button className="outline-button music-top" onClick={() => setMusicOpen(true)}><Music2 size={16} /> Música</button>
             {game.isGM ? <button className="outline-button invite-top" onClick={() => setInviteOpen(true)}><UserPlus size={16} /> Convidar</button> : null}
             <button className="outline-button" onClick={() => openPanel("sheet")}><ScrollText size={16} /> {game.hasCharacter ? "Abrir ficha" : "Criar ficha"}</button>
@@ -229,12 +326,26 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
         </section>
       </div>
 
-      <button className={`chat-floating-button ${unreadChat ? "has-unread" : ""}`} onClick={() => openPanel("chat")} aria-label="Abrir chat da sessão"><MessageCircle />{unreadChat > 0 ? <span>{unreadChat > 99 ? "99+" : unreadChat}</span> : null}</button>
+      <button className={`chat-floating-button ${totalUnread ? "has-unread" : ""}`} onClick={() => openPanel("chat")} aria-label="Abrir chat da sessão"><MessageCircle />{totalUnread > 0 ? <span>{totalUnread > 99 ? "99+" : totalUnread}</span> : null}</button>
 
       {panelOpen && activeTab ? <div className={`workspace-panel-layer ${panelPinned ? "pinned" : "overlay"}`} onMouseDown={(event) => { if (!panelPinned && event.target === event.currentTarget) closePanel(activeTab); }}>
         <aside className="workspace-tabs-panel">
           <header className="workspace-tabs-header">
-            <div className="workspace-tabs">{openTabs.map((tab) => { const Icon = panelIcons[tab]; return <button className={tab === activeTab ? "active" : ""} key={tab} onClick={() => { setActiveTab(tab); if (tab === "chat") setUnreadChat(0); }}><Icon size={14} /><span>{panelLabels[tab]}</span><i role="button" tabIndex={0} aria-label={`Fechar ${panelLabels[tab]}`} onClick={(event) => { event.stopPropagation(); closePanel(tab); }} onKeyDown={(event) => { if (event.key === "Enter") closePanel(tab); }}><X size={12} /></i></button>; })}</div>
+            <div className="workspace-tabs">{openTabs.map((tab) => {
+              const privateTab = isWhisperTab(tab);
+              const partnerId = privateTab ? whisperPartnerId(tab) : undefined;
+              const Icon = privateTab ? LockKeyhole : panelIcons[tab];
+              const label = getTabLabel(tab);
+              const unread = partnerId ? unreadWhispers[partnerId] ?? 0 : 0;
+              return <button className={tab === activeTab ? "active" : ""} key={tab} onClick={() => {
+                setActiveTab(tab);
+                if (tab === "chat") setUnreadChat(0);
+                if (partnerId) setUnreadWhispers((current) => ({ ...current, [partnerId]: 0 }));
+              }}><Icon size={14} /><span>{label}</span>{unread > 0 ? <b className="tab-unread">{unread}</b> : null}<i role="button" tabIndex={0} aria-label={`Fechar ${label}`} onClick={(event) => {
+                event.stopPropagation();
+                closePanel(tab);
+              }} onKeyDown={(event) => { if (event.key === "Enter") closePanel(tab); }}><X size={12} /></i></button>;
+            })}</div>
             <button className={panelPinned ? "active" : ""} onClick={() => setPanelPinned((value) => !value)} title={panelPinned ? "Desafixar painel" : "Fixar painel"}>{panelPinned ? <PinOff size={16} /> : <Pin size={16} />}</button>
           </header>
           <div className="workspace-tab-content">{renderPanel(activeTab)}</div>

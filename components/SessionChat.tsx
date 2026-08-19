@@ -1,7 +1,7 @@
 "use client";
 
 import { EyeOff, ImagePlus, LoaderCircle, LockKeyhole, MessageCircle, Send, Trash2, X } from "lucide-react";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { auth } from "@/lib/firebase";
 import type { AppUser, CampaignMember, ChatMessage } from "@/lib/types";
 
@@ -10,15 +10,32 @@ type Props = {
   campaignName?: string;
   user: AppUser;
   messages: ChatMessage[];
+  whispers?: ChatMessage[];
   participants?: CampaignMember[];
+  privateWith?: CampaignMember;
   isGM: boolean;
   embedded?: boolean;
   onSend: (text: string, image?: { imageUrl: string; driveFileId: string }, spoiler?: boolean, recipient?: CampaignMember) => Promise<void>;
+  onOpenWhisper?: (partnerId: string) => void;
   onClear: () => Promise<void>;
   onClose: () => void;
 };
 
-export function SessionChat({ campaignId, campaignName = "esta campanha", user, messages, participants = [], isGM, embedded = false, onSend, onClear, onClose }: Props) {
+export function SessionChat({
+  campaignId,
+  campaignName = "esta campanha",
+  user,
+  messages,
+  whispers = [],
+  participants = [],
+  privateWith,
+  isGM,
+  embedded = false,
+  onSend,
+  onOpenWhisper,
+  onClear,
+  onClose,
+}: Props) {
   const [text, setText] = useState("");
   const [file, setFile] = useState<File>();
   const [sending, setSending] = useState(false);
@@ -33,6 +50,27 @@ export function SessionChat({ campaignId, campaignName = "esta campanha", user, 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
+
+  const whisperTargets = useMemo(
+    () => privateWith ? [] : participants.filter((member) => member.userId !== user.id && (isGM || member.role === "gm")),
+    [isGM, participants, privateWith, user.id],
+  );
+
+  const privateConversations = useMemo(() => {
+    const byPartner = new Map<string, { member: CampaignMember; latest: ChatMessage }>();
+    for (const message of whispers) {
+      const partnerId = message.userId === user.id ? message.recipientId : message.userId;
+      if (!partnerId || partnerId === user.id) continue;
+      const member = participants.find((item) => item.userId === partnerId) ?? {
+        userId: partnerId,
+        name: message.userId === partnerId ? message.userName : message.recipientName ?? "Conversa privada",
+        role: (isGM ? "player" : "gm") as CampaignMember["role"],
+      };
+      const existing = byPartner.get(partnerId);
+      if (!existing || existing.latest.createdAt < message.createdAt) byPartner.set(partnerId, { member, latest: message });
+    }
+    return [...byPartner.values()].sort((a, b) => b.latest.createdAt - a.latest.createdAt);
+  }, [isGM, participants, user.id, whispers]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -53,10 +91,13 @@ export function SessionChat({ campaignId, campaignName = "esta campanha", user, 
         if (!response.ok) throw new Error(result.error || "Não foi possível enviar a imagem.");
         image = result;
       }
-      await onSend(text, image, spoiler, participants.find((member) => member.userId === recipientId));
+      const recipient = privateWith ?? participants.find((member) => member.userId === recipientId);
+      await onSend(text, image, spoiler, recipient);
+      if (!privateWith && recipient) onOpenWhisper?.(recipient.userId);
       setText("");
       setFile(undefined);
       setSpoiler(false);
+      setRecipientId("");
       if (fileRef.current) fileRef.current.value = "";
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível enviar a mensagem.");
@@ -64,28 +105,45 @@ export function SessionChat({ campaignId, campaignName = "esta campanha", user, 
       setSending(false);
     }
   }
-  const whisperTargets = participants.filter((member) => member.userId !== user.id && (isGM || member.role === "gm"));
+
+  const chatTitle = privateWith ? `Conversa com ${privateWith.name}` : "Chat da sessão";
+  const chatNote = privateWith
+    ? <>Conversa privada entre <strong>você</strong> e <strong>{privateWith.name}</strong>. Ninguém mais da campanha pode ler.</>
+    : <>Chat geral exclusivo de <strong>{campaignName}</strong>. Inicie um sussurro para abrir uma conversa privada.</>;
 
   return (
     <div className={"drawer-backdrop chat-backdrop" + (embedded ? " embedded" : "")} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <aside className="drawer chat-drawer">
         <header>
-          <div><p className="eyebrow">Durante a aventura</p><h2><MessageCircle size={19} /> Chat da sessão</h2></div>
+          <div><p className="eyebrow">{privateWith ? "Sussurro privado" : "Durante a aventura"}</p><h2>{privateWith ? <LockKeyhole size={19} /> : <MessageCircle size={19} />}{chatTitle}</h2></div>
           <div className="chat-header-actions">
-            {isGM && messages.length > 0 && <button className="icon-button" onClick={onClear} title="Limpar o chat"><Trash2 size={17} /></button>}
+            {!privateWith && isGM && messages.length > 0 ? <button className="icon-button" onClick={onClear} title="Limpar o chat geral"><Trash2 size={17} /></button> : null}
             <button className="icon-button" onClick={onClose} aria-label="Fechar"><X size={20} /></button>
           </div>
         </header>
 
-        <div className="chat-note">Chat exclusivo de <strong>{campaignName}</strong>. Sussurros só aparecem para remetente e destinatário.</div>
+        <div className={"chat-note" + (privateWith ? " private" : "")}>{chatNote}</div>
+        {!privateWith && privateConversations.length > 0 ? (
+          <div className="private-conversations">
+            <span><LockKeyhole size={12} /> Conversas privadas</span>
+            <div>
+              {privateConversations.map(({ member, latest }) => (
+                <button type="button" key={member.userId} onClick={() => onOpenWhisper?.(member.userId)} title={`Abrir conversa privada com ${member.name}`}>
+                  <i>{member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : member.name.slice(0, 1).toUpperCase()}</i>
+                  <span><strong>{member.name}</strong><small>{latest.text || "Imagem enviada"}</small></span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div className="chat-messages">
-          {messages.length === 0 && <div className="empty-chat"><MessageCircle /><strong>A conversa começa aqui</strong><span>Envie texto, pistas ou imagens para o grupo.</span></div>}
+          {messages.length === 0 ? <div className="empty-chat">{privateWith ? <LockKeyhole /> : <MessageCircle />}<strong>{privateWith ? "Conversa privada criada" : "A conversa começa aqui"}</strong><span>{privateWith ? `Somente você e ${privateWith.name} verão as mensagens.` : "Envie texto, pistas ou imagens para o grupo."}</span></div> : null}
           {messages.map((message) => (
-            <article className={`chat-message ${message.userId === user.id ? "mine" : ""} ${message.recipientId ? "whisper" : ""}`} key={message.id}>
+            <article className={`chat-message ${message.userId === user.id ? "mine" : ""} ${privateWith ? "whisper" : ""}`} key={message.id}>
               <span className="chat-avatar">{message.userAvatarUrl ? <img src={message.userAvatarUrl} alt="" /> : message.userName.slice(0, 1).toUpperCase()}</span>
               <div>
-                <header><strong>{message.userName}</strong>{message.recipientId ? <span className="whisper-label"><LockKeyhole size={10} /> para {message.userId === user.id ? message.recipientName : "você"}</span> : null}<time>{new Date(message.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</time></header>
-                {message.text && <p>{message.text}</p>}
+                <header><strong>{message.userName}</strong>{privateWith ? <span className="whisper-label"><LockKeyhole size={10} /> privado</span> : null}<time>{new Date(message.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</time></header>
+                {message.text ? <p>{message.text}</p> : null}
                 {message.imageUrl && message.spoiler && !revealedSpoilers.has(message.id) ? (
                   <button className="chat-spoiler" onClick={() => setRevealedSpoilers((current) => new Set(current).add(message.id))}>
                     <img className="chat-image" src={message.imageUrl} alt="Imagem ocultada como spoiler" />
@@ -99,12 +157,13 @@ export function SessionChat({ campaignId, campaignName = "esta campanha", user, 
         </div>
 
         <form ref={formRef} className="chat-composer" onSubmit={submit}>
-          {whisperTargets.length > 0 ? <label className="whisper-target"><LockKeyhole size={14} /><span>Enviar para</span><select value={recipientId} onChange={(event) => setRecipientId(event.target.value)}><option value="">Todos da campanha</option>{whisperTargets.map((member) => <option key={member.userId} value={member.userId}>Sussurro para {member.name}</option>)}</select></label> : null}
-          {file && <><div className="selected-image"><ImagePlus size={15} /><span>{file.name}</span><button type="button" onClick={() => { setFile(undefined); setSpoiler(false); if (fileRef.current) fileRef.current.value = ""; }}><X size={14} /></button></div><label className="spoiler-option"><input type="checkbox" checked={spoiler} onChange={(event) => setSpoiler(event.target.checked)} /><EyeOff size={14} /> Ocultar imagem como spoiler de role play</label></>}
-          {error && <p className="chat-error">{error}</p>}
+          {privateWith ? <div className="private-recipient"><LockKeyhole size={13} /> Enviando somente para <strong>{privateWith.name}</strong></div> : null}
+          {whisperTargets.length > 0 ? <label className="whisper-target"><LockKeyhole size={14} /><span>Enviar para</span><select value={recipientId} onChange={(event) => setRecipientId(event.target.value)}><option value="">Todos da campanha</option>{whisperTargets.map((member) => <option key={member.userId} value={member.userId}>Abrir conversa com {member.name}</option>)}</select></label> : null}
+          {file ? <><div className="selected-image"><ImagePlus size={15} /><span>{file.name}</span><button type="button" onClick={() => { setFile(undefined); setSpoiler(false); if (fileRef.current) fileRef.current.value = ""; }}><X size={14} /></button></div><label className="spoiler-option"><input type="checkbox" checked={spoiler} onChange={(event) => setSpoiler(event.target.checked)} /><EyeOff size={14} /> Ocultar imagem como spoiler de role play</label></> : null}
+          {error ? <p className="chat-error">{error}</p> : null}
           <div>
             <label className="chat-file-button" title="Enviar imagem"><ImagePlus size={19} /><input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(event) => setFile(event.target.files?.[0])} /></label>
-            <textarea maxLength={2000} rows={1} placeholder="Enter envia · Shift+Enter quebra a linha" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => {
+            <textarea maxLength={2000} rows={1} placeholder={privateWith ? `Mensagem privada para ${privateWith.name}` : "Enter envia · Shift+Enter quebra a linha"} value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                 event.preventDefault();
                 formRef.current?.requestSubmit();

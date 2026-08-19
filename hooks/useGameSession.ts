@@ -185,7 +185,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
         id: item.id,
         ...item.data(),
         createdAt: item.data().createdAt?.toMillis?.() ?? Date.now(),
-      }) as ChatMessage)),
+      }) as ChatMessage).sort((a, b) => a.createdAt - b.createdAt)),
       () => setSyncError("Os sussurros da sessão não puderam ser sincronizados."),
     );
     const unsubscribeMembers = onSnapshot(
@@ -359,6 +359,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
   const sendChatMessage = useCallback(async (text: string, image?: { imageUrl: string; driveFileId: string }, spoiler = false, recipient?: CampaignMember) => {
     const cleanText = text.trim().slice(0, 2000);
     if (!cleanText && !image) return;
+    const whisperParticipantIds = recipient ? [user.id, recipient.userId].sort() : undefined;
     const next: ChatMessage = {
       id: crypto.randomUUID(),
       userId: user.id,
@@ -368,7 +369,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
       ...(user.avatarUrl ? { userAvatarUrl: user.avatarUrl } : {}),
       ...(image ? image : {}),
       ...(image && spoiler ? { spoiler: true } : {}),
-      ...(recipient ? { recipientId: recipient.userId, recipientName: recipient.name, participantIds: [user.id, recipient.userId] } : {}),
+      ...(recipient ? { recipientId: recipient.userId, recipientName: recipient.name, participantIds: whisperParticipantIds, conversationId: whisperParticipantIds?.join("__") } : {}),
     };
     if (!online || !db) {
       if (recipient) setWhisperMessages((current) => [...current, next].slice(-100));
@@ -421,10 +422,9 @@ export function useGameSession(campaignId: string, user: AppUser) {
     const firestore = db;
     if (online && firestore) await Promise.all(current.map((message) => deleteDoc(doc(firestore, "campaigns", campaignId, "chatMessages", message.id))));
   }, [campaignId, chatMessages, online]);
-  const visibleChatMessages = useMemo(() => [...chatMessages, ...whisperMessages].sort((a, b) => a.createdAt - b.createdAt).slice(-100), [chatMessages, whisperMessages]);
 
   return useMemo(() => ({
-    character, hasCharacter, rolls, tokens, scene, journal, music, sheetTemplate, chatMessages: visibleChatMessages, notes, participants, isGM: gmId === user.id, online, syncError,
+    character, hasCharacter, rolls, tokens, scene, journal, music, sheetTemplate, chatMessages, whisperMessages, notes, participants, isGM: gmId === user.id, online, syncError,
     saveCharacter, rollDie, moveToken, toggleTokenLock, addToken, removeToken, saveScene, revealArea, clearRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveMusic, updateMusicPlayback,
-  }), [addToken, character, chatMessages, clearChat, clearRevealed, createLight, deleteLight, gmId, hasCharacter, journal, moveLight, moveToken, music, notes, online, participants, removeToken, revealArea, rollDie, rolls, saveCharacter, saveJournal, saveMusic, saveNotes, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, sheetTemplate, syncError, toggleTokenLock, tokens, updateLight, updateMusicPlayback, user.id, visibleChatMessages, whisperMessages]);
+  }), [addToken, character, chatMessages, clearChat, clearRevealed, createLight, deleteLight, gmId, hasCharacter, journal, moveLight, moveToken, music, notes, online, participants, removeToken, revealArea, rollDie, rolls, saveCharacter, saveJournal, saveMusic, saveNotes, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, sheetTemplate, syncError, toggleTokenLock, tokens, updateLight, updateMusicPlayback, user.id, whisperMessages]);
 }

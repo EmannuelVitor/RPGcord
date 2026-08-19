@@ -158,6 +158,7 @@ export type ChatMessage = {
   recipientId?: string;
   recipientName?: string;
   participantIds?: string[];
+  conversationId?: string;
   createdAt: number;
 };
 

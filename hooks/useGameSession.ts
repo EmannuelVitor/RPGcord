@@ -12,11 +12,12 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { db, isFirebaseConfigured } from "@/lib/firebase";
 import { DEFAULT_SHEET_TEMPLATE, normalizeSheetTemplate } from "@/lib/sheet-template";
-import type { AppUser, CampaignJournal, CampaignMusic, Character, ChatMessage, DiceRoll, DiceValidationMode, LightSource, MapToken, Scene, SheetTemplate } from "@/lib/types";
+import type { AppUser, CampaignJournal, CampaignMember, CampaignMusic, Character, CharacterNotes, ChatMessage, DiceRoll, DiceValidationMode, LightSource, MapToken, Scene, SheetTemplate } from "@/lib/types";
 
 function blankCharacter(user: AppUser): Character {
   return {
@@ -44,12 +45,16 @@ const initialScene: Scene = {
   mapFit: "contain",
   fogEnabled: false,
   visionRadius: 14,
+  visionMode: "shared",
+  ambientLight: 0,
+  movementBounds: { enabled: false, left: 3, top: 5, right: 97, bottom: 95 },
   revealedAreas: [],
   dynamicLights: [],
 };
 
 const initialJournal: CampaignJournal = { content: "" };
 const initialMusic: CampaignMusic = { youtubeUrl: "", title: "", loop: false, playing: false, position: 0 };
+const initialNotes: CharacterNotes = { content: "", shareWithGM: false, sharedWithPlayerIds: [] };
 
 function normalizeLight(light: LightSource): LightSource {
   const dimRadius = Math.max(3, Math.min(45, light.dimRadius ?? light.radius ?? 16));
@@ -66,10 +71,13 @@ export function useGameSession(campaignId: string, user: AppUser) {
   const [rolls, setRolls] = useState<DiceRoll[]>([]);
   const [tokens, setTokens] = useState<MapToken[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [whisperMessages, setWhisperMessages] = useState<ChatMessage[]>([]);
   const [scene, setScene] = useState<Scene>(initialScene);
   const [journal, setJournal] = useState<CampaignJournal>(initialJournal);
   const [music, setMusic] = useState<CampaignMusic>(initialMusic);
   const [sheetTemplate, setSheetTemplate] = useState<SheetTemplate>(DEFAULT_SHEET_TEMPLATE);
+  const [notes, setNotes] = useState<CharacterNotes>(initialNotes);
+  const [participants, setParticipants] = useState<CampaignMember[]>([]);
   const [gmId, setGmId] = useState("");
   const [syncError, setSyncError] = useState<string>();
   const online = isFirebaseConfigured && Boolean(db);
@@ -80,10 +88,13 @@ export function useGameSession(campaignId: string, user: AppUser) {
     setRolls([]);
     setTokens([]);
     setChatMessages([]);
+    setWhisperMessages([]);
     setScene(initialScene);
     setJournal(initialJournal);
     setMusic(initialMusic);
     setSheetTemplate(DEFAULT_SHEET_TEMPLATE);
+    setNotes(initialNotes);
+    setParticipants([]);
     setSyncError(undefined);
     if (!online || !db || !campaignId || !user.id) return;
 
@@ -168,6 +179,43 @@ export function useGameSession(campaignId: string, user: AppUser) {
       }) as ChatMessage).reverse()),
       () => setSyncError("O chat da sessão não pôde ser sincronizado."),
     );
+    const unsubscribeWhispers = onSnapshot(
+      query(collection(db, "campaigns", campaignId, "whispers"), where("participantIds", "array-contains", user.id), limit(100)),
+      (snapshot) => setWhisperMessages(snapshot.docs.map((item) => ({
+        id: item.id,
+        ...item.data(),
+        createdAt: item.data().createdAt?.toMillis?.() ?? Date.now(),
+      }) as ChatMessage)),
+      () => setSyncError("Os sussurros da sessão não puderam ser sincronizados."),
+    );
+    const unsubscribeMembers = onSnapshot(
+      collection(db, "campaigns", campaignId, "members"),
+      (snapshot) => setParticipants(snapshot.docs.map((item) => ({
+        userId: item.id,
+        ...item.data(),
+        lastSeenAt: item.data().lastSeenAt?.toMillis?.() ?? undefined,
+        joinedAt: item.data().joinedAt?.toMillis?.() ?? undefined,
+      }) as CampaignMember)),
+      () => setSyncError("Os participantes não puderam ser sincronizados."),
+    );
+    const unsubscribeNotes = onSnapshot(
+      doc(db, "campaigns", campaignId, "notes", user.id),
+      (snapshot) => setNotes(snapshot.exists() ? {
+        content: String(snapshot.data().content ?? ""),
+        shareWithGM: Boolean(snapshot.data().shareWithGM),
+        sharedWithPlayerIds: Array.isArray(snapshot.data().sharedWithPlayerIds) ? snapshot.data().sharedWithPlayerIds : [],
+        updatedAt: snapshot.data().updatedAt?.toMillis?.() ?? undefined,
+      } : initialNotes),
+      () => setSyncError("Seu bloco de notas não pôde ser sincronizado."),
+    );
+    const memberRef = doc(db, "campaigns", campaignId, "members", user.id);
+    const refreshPresence = () => setDoc(memberRef, {
+      name: user.name,
+      ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
+      lastSeenAt: serverTimestamp(),
+    }, { merge: true });
+    void refreshPresence();
+    const presenceTimer = window.setInterval(() => void refreshPresence(), 45000);
 
     return () => {
       unsubscribeCampaign();
@@ -178,6 +226,10 @@ export function useGameSession(campaignId: string, user: AppUser) {
       unsubscribeJournal();
       unsubscribeMusic();
       unsubscribeChat();
+      unsubscribeWhispers();
+      unsubscribeMembers();
+      unsubscribeNotes();
+      window.clearInterval(presenceTimer);
     };
   }, [campaignId, online, user]);
 
@@ -229,6 +281,16 @@ export function useGameSession(campaignId: string, user: AppUser) {
     setTokens((current) => current.map((token) => token.id === tokenId ? { ...token, x, y } : token));
     if (online && db) await updateDoc(doc(db, "campaigns", campaignId, "tokens", tokenId), { x, y });
   }, [campaignId, online]);
+  const toggleTokenLock = useCallback(async (tokenId: string) => {
+    const token = tokens.find((item) => item.id === tokenId);
+    if (!token) return;
+    const isGM = gmId === user.id;
+    if (!isGM && token.ownerId !== user.id) return;
+    if (token.locked && token.lockedBy && token.lockedBy !== user.id && !isGM) return;
+    const lockPatch = token.locked ? { locked: false, lockedBy: "" } : { locked: true, lockedBy: user.id };
+    setTokens((current) => current.map((item) => item.id === tokenId ? { ...item, ...lockPatch } : item));
+    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "tokens", tokenId), lockPatch, { merge: true });
+  }, [campaignId, gmId, online, tokens, user.id]);
 
   const addToken = useCallback(async (token: MapToken) => {
     setTokens((current) => [...current.filter((item) => item.id !== token.id), token]);
@@ -294,7 +356,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
     if (online && db) await setDoc(doc(db, "campaigns", campaignId, "tokens", tokenId), { visionRadius: normalized }, { merge: true });
   }, [campaignId, online]);
 
-  const sendChatMessage = useCallback(async (text: string, image?: { imageUrl: string; driveFileId: string }, spoiler = false) => {
+  const sendChatMessage = useCallback(async (text: string, image?: { imageUrl: string; driveFileId: string }, spoiler = false, recipient?: CampaignMember) => {
     const cleanText = text.trim().slice(0, 2000);
     if (!cleanText && !image) return;
     const next: ChatMessage = {
@@ -306,13 +368,16 @@ export function useGameSession(campaignId: string, user: AppUser) {
       ...(user.avatarUrl ? { userAvatarUrl: user.avatarUrl } : {}),
       ...(image ? image : {}),
       ...(image && spoiler ? { spoiler: true } : {}),
+      ...(recipient ? { recipientId: recipient.userId, recipientName: recipient.name, participantIds: [user.id, recipient.userId] } : {}),
     };
     if (!online || !db) {
-      setChatMessages((current) => [...current, next].slice(-100));
+      if (recipient) setWhisperMessages((current) => [...current, next].slice(-100));
+      else setChatMessages((current) => [...current, next].slice(-100));
       return;
     }
     const { id: _id, createdAt: _createdAt, ...payload } = next;
-    await addDoc(collection(db, "campaigns", campaignId, "chatMessages"), { ...payload, createdAt: serverTimestamp() });
+    const collectionName = recipient ? "whispers" : "chatMessages";
+    await addDoc(collection(db, "campaigns", campaignId, collectionName), { ...payload, createdAt: serverTimestamp() });
   }, [campaignId, online, user.avatarUrl, user.id, user.name]);
 
   const saveJournal = useCallback(async (content: string) => {
@@ -320,6 +385,11 @@ export function useGameSession(campaignId: string, user: AppUser) {
     setJournal(next);
     if (online && db) await setDoc(doc(db, "campaigns", campaignId, "journal", "main"), { ...next, updatedAt: serverTimestamp() });
   }, [campaignId, online, user.id, user.name]);
+  const saveNotes = useCallback(async (nextNotes: CharacterNotes) => {
+    const saved = { ...nextNotes, content: nextNotes.content.slice(0, 20000), updatedAt: Date.now() };
+    setNotes(saved);
+    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "notes", user.id), { ...saved, ownerId: user.id, updatedAt: serverTimestamp() });
+  }, [campaignId, online, user.id]);
 
   const saveSheetTemplate = useCallback(async (nextTemplate: SheetTemplate) => {
     const saved = { ...nextTemplate, id: "current", updatedAt: Date.now() };
@@ -351,9 +421,10 @@ export function useGameSession(campaignId: string, user: AppUser) {
     const firestore = db;
     if (online && firestore) await Promise.all(current.map((message) => deleteDoc(doc(firestore, "campaigns", campaignId, "chatMessages", message.id))));
   }, [campaignId, chatMessages, online]);
+  const visibleChatMessages = useMemo(() => [...chatMessages, ...whisperMessages].sort((a, b) => a.createdAt - b.createdAt).slice(-100), [chatMessages, whisperMessages]);
 
   return useMemo(() => ({
-    character, hasCharacter, rolls, tokens, scene, journal, music, sheetTemplate, chatMessages, isGM: gmId === user.id, online, syncError,
-    saveCharacter, rollDie, moveToken, addToken, removeToken, saveScene, revealArea, clearRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, clearChat, saveJournal, saveSheetTemplate, saveMusic, updateMusicPlayback,
-  }), [addToken, character, chatMessages, clearChat, clearRevealed, createLight, deleteLight, gmId, hasCharacter, journal, moveLight, moveToken, music, online, removeToken, revealArea, rollDie, rolls, saveCharacter, saveJournal, saveMusic, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, sheetTemplate, syncError, tokens, updateLight, updateMusicPlayback, user.id]);
+    character, hasCharacter, rolls, tokens, scene, journal, music, sheetTemplate, chatMessages: visibleChatMessages, notes, participants, isGM: gmId === user.id, online, syncError,
+    saveCharacter, rollDie, moveToken, toggleTokenLock, addToken, removeToken, saveScene, revealArea, clearRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveMusic, updateMusicPlayback,
+  }), [addToken, character, chatMessages, clearChat, clearRevealed, createLight, deleteLight, gmId, hasCharacter, journal, moveLight, moveToken, music, notes, online, participants, removeToken, revealArea, rollDie, rolls, saveCharacter, saveJournal, saveMusic, saveNotes, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, sheetTemplate, syncError, toggleTokenLock, tokens, updateLight, updateMusicPlayback, user.id, visibleChatMessages, whisperMessages]);
 }

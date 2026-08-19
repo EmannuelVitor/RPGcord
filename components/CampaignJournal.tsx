@@ -8,10 +8,11 @@ type Props = {
   journal: Journal;
   isGM: boolean;
   onSave: (content: string) => Promise<void>;
+  embedded?: boolean;
   onClose: () => void;
 };
 
-export function CampaignJournal({ journal, isGM, onSave, onClose }: Props) {
+export function CampaignJournal({ journal, isGM, embedded = false, onSave, onClose }: Props) {
   const [draft, setDraft] = useState(journal.content);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -34,7 +35,7 @@ export function CampaignJournal({ journal, isGM, onSave, onClose }: Props) {
   }
 
   return (
-    <div className="drawer-backdrop journal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div className={"drawer-backdrop journal-backdrop" + (embedded ? " embedded" : "")} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <aside className="drawer journal-drawer">
         <header>
           <div><p className="eyebrow">Memória da aventura</p><h2><BookOpen size={19} /> Diário da campanha</h2></div>

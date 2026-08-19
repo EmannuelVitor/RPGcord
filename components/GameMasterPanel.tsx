@@ -15,10 +15,11 @@ type Props = {
   onSaveSheetTemplate: (template: SheetTemplate) => Promise<void>;
   onAddToken: (token: MapToken) => Promise<void>;
   onRemoveToken: (id: string) => Promise<void>;
+  embedded?: boolean;
   onClose: () => void;
 };
 
-export function GameMasterPanel({ scene, tokens, sheetTemplate, ownerId, onSaveScene, onSaveSheetTemplate, onAddToken, onRemoveToken, onClose }: Props) {
+export function GameMasterPanel({ scene, tokens, sheetTemplate, ownerId, embedded = false, onSaveScene, onSaveSheetTemplate, onAddToken, onRemoveToken, onClose }: Props) {
   const [draft, setDraft] = useState(scene);
   const [tokenName, setTokenName] = useState("");
   const [tokenImage, setTokenImage] = useState("");
@@ -39,6 +40,15 @@ export function GameMasterPanel({ scene, tokens, sheetTemplate, ownerId, onSaveS
       revealUrl: toDirectDriveUrl(draft.revealUrl),
       mapFit: draft.mapFit ?? "contain",
       visionRadius: Math.max(3, Math.min(45, draft.visionRadius ?? 14)),
+      visionMode: draft.visionMode ?? "shared",
+      ambientLight: Math.max(0, Math.min(1, draft.ambientLight ?? 0)),
+      movementBounds: {
+        enabled: Boolean(draft.movementBounds?.enabled),
+        left: Math.max(0, Math.min(99, draft.movementBounds?.left ?? 3)),
+        top: Math.max(0, Math.min(99, draft.movementBounds?.top ?? 5)),
+        right: Math.max(1, Math.min(100, draft.movementBounds?.right ?? 97)),
+        bottom: Math.max(1, Math.min(100, draft.movementBounds?.bottom ?? 95)),
+      },
       revealedAreas: draft.revealedAreas ?? [],
       dynamicLights: (draft.dynamicLights ?? []).map((light) => {
         const dimRadius = Math.max(3, Math.min(45, light.dimRadius ?? light.radius ?? 16));
@@ -69,7 +79,7 @@ export function GameMasterPanel({ scene, tokens, sheetTemplate, ownerId, onSaveS
     setTokenImage("");
   }
 
-  return <div className="drawer-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+  return <div className={"drawer-backdrop" + (embedded ? " embedded" : "")} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
     <aside className="drawer gm-drawer">
       <header><div><p className="eyebrow">Ferramentas do mestre</p><h2>Configurar campanha</h2></div><button className="icon-button" onClick={onClose} aria-label="Fechar"><X size={20} /></button></header>
       <form onSubmit={saveScene}>
@@ -87,6 +97,10 @@ export function GameMasterPanel({ scene, tokens, sheetTemplate, ownerId, onSaveS
           <h3><Moon size={17} /> Neblina de guerra</h3>
           <label className="toggle-field"><input type="checkbox" checked={draft.fogEnabled ?? false} onChange={(event) => setDraft({ ...draft, fogEnabled: event.target.checked })} /><span><strong>Escurecer áreas não exploradas</strong><small>Jogadores enxergam ao redor dos heróis e das fontes de luz.</small></span></label>
           <label>Raio de visão dos jogadores (%)<input type="number" min="3" max="45" value={draft.visionRadius ?? 14} onChange={(event) => setDraft({ ...draft, visionRadius: Number(event.target.value) })} /></label>
+          <label>Como os campos de visão funcionam<select value={draft.visionMode ?? "shared"} onChange={(event) => setDraft({ ...draft, visionMode: event.target.value as Scene["visionMode"] })}><option value="shared">Compartilhado — a visão do grupo se une</option><option value="individual">Individual — cada jogador vê apenas seu herói</option></select></label>
+          <label>Iluminação ambiente <span>{Math.round((draft.ambientLight ?? 0) * 100)}%</span><input type="range" min="0" max="1" step=".05" value={draft.ambientLight ?? 0} onChange={(event) => setDraft({ ...draft, ambientLight: Number(event.target.value) })} /></label>
+          <label className="toggle-field"><input type="checkbox" checked={draft.movementBounds?.enabled ?? false} onChange={(event) => setDraft({ ...draft, movementBounds: { ...(draft.movementBounds ?? { left: 3, top: 5, right: 97, bottom: 95 }), enabled: event.target.checked } })} /><span><strong>Limitar movimento dos jogadores</strong><small>O mestre continua livre; os jogadores ficam dentro do retângulo definido.</small></span></label>
+          {draft.movementBounds?.enabled ? <div className="movement-bounds-grid"><label>Esquerda<input type="number" min="0" max="99" value={draft.movementBounds.left} onChange={(event) => setDraft({ ...draft, movementBounds: { ...draft.movementBounds!, left: Number(event.target.value) } })} /></label><label>Topo<input type="number" min="0" max="99" value={draft.movementBounds.top} onChange={(event) => setDraft({ ...draft, movementBounds: { ...draft.movementBounds!, top: Number(event.target.value) } })} /></label><label>Direita<input type="number" min="1" max="100" value={draft.movementBounds.right} onChange={(event) => setDraft({ ...draft, movementBounds: { ...draft.movementBounds!, right: Number(event.target.value) } })} /></label><label>Base<input type="number" min="1" max="100" value={draft.movementBounds.bottom} onChange={(event) => setDraft({ ...draft, movementBounds: { ...draft.movementBounds!, bottom: Number(event.target.value) } })} /></label></div> : null}
         </section>
         <section className="gm-section">
           <h3><Lightbulb size={17} /> Pontos de iluminação</h3>

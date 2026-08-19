@@ -1,0 +1,249 @@
+"use client";
+
+import {
+  BookOpen,
+  ChevronDown,
+  Crown,
+  Dices,
+  HelpCircle,
+  LogOut,
+  Map as MapIcon,
+  Menu,
+  MessageCircle,
+  Music2,
+  NotebookPen,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pin,
+  PinOff,
+  ScrollText,
+  Settings,
+  Shield,
+  Sparkles,
+  UserPlus,
+  Users,
+  Wifi,
+  X,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Battlemap } from "@/components/Battlemap";
+import { CampaignJournal } from "@/components/CampaignJournal";
+import { CharacterSheet } from "@/components/CharacterSheet";
+import { DiceHistoryPanel } from "@/components/DiceHistoryPanel";
+import { DiceRoller } from "@/components/DiceRoller";
+import { GameMasterPanel } from "@/components/GameMasterPanel";
+import { InviteDialog } from "@/components/InviteDialog";
+import { MusicPlayer } from "@/components/MusicPlayer";
+import { ParticipantsPopover } from "@/components/ParticipantsPopover";
+import { PlayerNotes } from "@/components/PlayerNotes";
+import { SessionChat } from "@/components/SessionChat";
+import { SettingsPanel } from "@/components/SettingsPanel";
+import { useGameSession } from "@/hooks/useGameSession";
+import type { AppUser, Campaign } from "@/lib/types";
+
+type PanelKey = "sheet" | "history" | "chat" | "journal" | "notes" | "settings" | "gm";
+
+const panelLabels: Record<PanelKey, string> = {
+  sheet: "Ficha",
+  history: "Dados",
+  chat: "Chat",
+  journal: "Diário",
+  notes: "Notas",
+  settings: "Configurações",
+  gm: "Mestre",
+};
+
+const panelIcons: Record<PanelKey, typeof ScrollText> = {
+  sheet: ScrollText,
+  history: Dices,
+  chat: MessageCircle,
+  journal: BookOpen,
+  notes: NotebookPen,
+  settings: Settings,
+  gm: Crown,
+};
+
+function playChatNotification() {
+  try {
+    const AudioContextClass = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = new AudioContextClass();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.frequency.setValueAtTime(620, context.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(820, context.currentTime + .09);
+    gain.gain.setValueAtTime(.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(.08, context.currentTime + .015);
+    gain.gain.exponentialRampToValueAtTime(.0001, context.currentTime + .16);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + .17);
+    oscillator.addEventListener("ended", () => void context.close(), { once: true });
+  } catch {
+    // Navegadores podem bloquear áudio antes da primeira interação.
+  }
+}
+
+export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutorial }: {
+  user: AppUser;
+  campaign: Campaign;
+  onCampaigns: () => void;
+  onSignOut: () => Promise<void>;
+  onTutorial: () => void;
+}) {
+  const game = useGameSession(campaign.id, user);
+  const [openTabs, setOpenTabs] = useState<PanelKey[]>([]);
+  const [activeTab, setActiveTab] = useState<PanelKey>();
+  const [panelPinned, setPanelPinned] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [revealOpen, setRevealOpen] = useState(false);
+  const [musicOpen, setMusicOpen] = useState(false);
+  const [participantsOpen, setParticipantsOpen] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [unreadChat, setUnreadChat] = useState(0);
+  const lastMessageRef = useRef<string | undefined>(undefined);
+
+  const openPanel = useCallback((panel: PanelKey) => {
+    setOpenTabs((current) => current.includes(panel) ? current : [...current, panel]);
+    setActiveTab(panel);
+    if (panel === "chat") setUnreadChat(0);
+    setSidebarOpen(false);
+  }, []);
+
+  const closePanel = useCallback((panel: PanelKey) => {
+    setOpenTabs((current) => {
+      const next = current.filter((item) => item !== panel);
+      setActiveTab((active) => active === panel ? next.at(-1) : active);
+      if (next.length === 0) setPanelPinned(false);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("rpgcord.theme");
+    if (stored === "dark") setTheme("dark");
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("rpgcord.theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    const latest = game.chatMessages.at(-1);
+    if (!latest) return;
+    if (!lastMessageRef.current) {
+      lastMessageRef.current = latest.id;
+      return;
+    }
+    if (latest.id !== lastMessageRef.current) {
+      lastMessageRef.current = latest.id;
+      if (latest.userId !== user.id && activeTab !== "chat") {
+        setUnreadChat((current) => current + 1);
+        playChatNotification();
+      }
+    }
+  }, [activeTab, game.chatMessages, user.id]);
+
+  const characterName = game.character.name.trim() || "Crie sua personagem";
+  const hpPercent = game.character.maxHp > 0 ? Math.max(0, Math.min(100, Math.round((game.character.hp / game.character.maxHp) * 100))) : 0;
+  const panelOpen = Boolean(activeTab && openTabs.includes(activeTab));
+  const onlineCount = game.participants.filter((member) => member.lastSeenAt && Date.now() - member.lastSeenAt < 100000).length;
+
+  function renderPanel(panel: PanelKey) {
+    if (panel === "sheet") return <CharacterSheet embedded campaignId={campaign.id} character={game.character} template={game.sheetTemplate} onSave={game.saveCharacter} onClose={() => closePanel("sheet")} />;
+    if (panel === "history") return <DiceHistoryPanel embedded rolls={game.rolls} onClose={() => closePanel("history")} />;
+    if (panel === "chat") return <SessionChat embedded campaignId={campaign.id} campaignName={campaign.name} user={user} messages={game.chatMessages} participants={game.participants} isGM={game.isGM} onSend={game.sendChatMessage} onClear={game.clearChat} onClose={() => closePanel("chat")} />;
+    if (panel === "journal") return <CampaignJournal embedded journal={game.journal} isGM={game.isGM} onSave={game.saveJournal} onClose={() => closePanel("journal")} />;
+    if (panel === "notes") return <PlayerNotes embedded notes={game.notes} participants={game.participants} userId={user.id} onSave={game.saveNotes} onClose={() => closePanel("notes")} />;
+    if (panel === "settings") return <SettingsPanel embedded theme={theme} onTheme={setTheme} onClose={() => closePanel("settings")} />;
+    if (panel === "gm" && game.isGM) return <GameMasterPanel embedded scene={game.scene} tokens={game.tokens} sheetTemplate={game.sheetTemplate} ownerId={user.id} onSaveScene={game.saveScene} onSaveSheetTemplate={game.saveSheetTemplate} onAddToken={game.addToken} onRemoveToken={game.removeToken} onClose={() => closePanel("gm")} />;
+    return null;
+  }
+
+  return (
+    <main className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${panelPinned && panelOpen ? "panel-pinned" : ""}`}>
+      <button className="mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Abrir menu"><Menu /></button>
+      <button className="sidebar-toggle" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Exibir menu lateral" : "Ocultar menu lateral"}>{sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button>
+      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
+        <div className="brand"><span className="brand-mark"><Sparkles /></span><div><strong>RPGcord</strong><small>RPG COMPANION</small></div></div>
+        <button className="sidebar-close" onClick={() => setSidebarOpen(false)}><X size={18} /></button>
+        <nav>
+          <p>Jornada</p>
+          <button className="active" onClick={() => setSidebarOpen(false)}><MapIcon /> Mapa da mesa <span>AO VIVO</span></button>
+          <button onClick={() => openPanel("sheet")}><ScrollText /> {game.hasCharacter ? "Minha ficha" : "Criar ficha"}</button>
+          <button onClick={() => openPanel("history")}><Dices /> Histórico de dados</button>
+          <button onClick={() => openPanel("chat")}><MessageCircle /> Chat da sessão {unreadChat > 0 ? <span>{unreadChat}</span> : null}</button>
+          <button onClick={() => openPanel("journal")}><BookOpen /> Diário da campanha</button>
+          <button disabled={!game.hasCharacter} onClick={() => openPanel("notes")}><NotebookPen /> Notas da personagem</button>
+          <button onClick={() => { setMusicOpen(true); setSidebarOpen(false); }}><Music2 /> Música da campanha</button>
+          {game.isGM ? <><p className="nav-group">Mestre</p><button onClick={() => openPanel("gm")}><Crown /> Preparar cena</button><button onClick={() => { setInviteOpen(true); setSidebarOpen(false); }}><UserPlus /> Convidar jogadores</button></> : null}
+        </nav>
+        <div className="sidebar-bottom">
+          <button onClick={onTutorial}><HelpCircle /> Ajuda</button><button onClick={() => openPanel("settings")}><Settings /> Configurações</button>
+          <button className="user-card" onClick={onSignOut} title="Sair da conta">
+            <span className="user-avatar">{user.avatarUrl ? <img src={user.avatarUrl} alt="" /> : user.name.slice(0, 1)}</span>
+            <span><strong>{user.name}</strong><small>{game.isGM ? "Mestre da mesa" : "Aventureiro"}</small></span>
+            <LogOut size={15} />
+          </button>
+        </div>
+      </aside>
+
+      <div className="workspace">
+        <header className="topbar">
+          <button className="campaign-heading" onClick={onCampaigns} title="Ver campanhas"><span><p className="eyebrow">Campanha</p><h1>{campaign.name} <ChevronDown size={16} /></h1></span></button>
+          <div className="session-status">
+            <span className="online"><Wifi size={14} /> Mesa sincronizada</span>
+            <button className="party-stack party-button" onClick={() => setParticipantsOpen((value) => !value)} title="Ver jogadores"><i><Users size={12} /></i><i>{onlineCount}/{Math.max(campaign.memberIds.length, game.participants.length)}</i></button>
+            <button className="outline-button chat-top" onClick={() => openPanel("chat")}><MessageCircle size={16} /> Chat {unreadChat > 0 ? <b>{unreadChat}</b> : null}</button>
+            <button className="outline-button music-top" onClick={() => setMusicOpen(true)}><Music2 size={16} /> Música</button>
+            {game.isGM ? <button className="outline-button invite-top" onClick={() => setInviteOpen(true)}><UserPlus size={16} /> Convidar</button> : null}
+            <button className="outline-button" onClick={() => openPanel("sheet")}><ScrollText size={16} /> {game.hasCharacter ? "Abrir ficha" : "Criar ficha"}</button>
+          </div>
+          {participantsOpen ? <ParticipantsPopover members={game.participants} currentUserId={user.id} onClose={() => setParticipantsOpen(false)} /> : null}
+        </header>
+
+        {(campaign.description || game.syncError || !game.hasCharacter) ? (
+          <div className={`notice ${!game.hasCharacter && !game.syncError ? "action-notice" : ""}`}>
+            {game.syncError ? <><strong>Problema de sincronização.</strong> {game.syncError}</> : !game.hasCharacter ? <><strong>Sua aventura começa com uma ficha.</strong> <button onClick={() => openPanel("sheet")}>Criar personagem agora →</button></> : campaign.description}
+          </div>
+        ) : null}
+
+        <div className="content-grid">
+          <Battlemap scene={game.scene} tokens={game.tokens} userId={user.id} isGM={game.isGM} hasCharacter={game.hasCharacter} onMove={game.moveToken} onToggleTokenLock={game.toggleTokenLock} onRequestCharacter={() => openPanel("sheet")} onRevealArea={game.revealArea} onClearRevealed={game.clearRevealed} onMoveLight={game.moveLight} onCreateLight={game.createLight} onUpdateLight={game.updateLight} onDeleteLight={game.deleteLight} onSetGlobalVision={game.setGlobalVision} onSetTokenVision={game.setTokenVision} />
+          <DiceRoller rolls={game.rolls} onRoll={game.rollDie} />
+        </div>
+
+        <section className="bottom-strip">
+          <div className="quest-card"><span><BookOpen size={18} /></span><div><p className="eyebrow">Campanha atual</p><strong>{campaign.description || "A história será escrita pelo seu grupo."}</strong></div><small>{game.isGM ? "MESTRE" : "JOGADOR"}</small></div>
+          <div className="character-summary">
+            <div className="portrait">{game.character.imageUrl ? <img src={game.character.imageUrl} alt="" /> : characterName.split(" ").map((part) => part[0]).join("").slice(0, 2)}</div>
+            <div><p className="eyebrow">Seu personagem</p><strong>{characterName}</strong><span>{game.hasCharacter ? `${game.character.ancestry || "Sem ancestralidade"} · ${game.character.characterClass || "Sem classe"} ${game.character.level}` : "Crie a ficha para gerar seu pino no mapa"}</span></div>
+            {game.hasCharacter ? <div className="hp"><span><i style={{ width: `${hpPercent}%` }} /></span><strong>{game.character.hp}/{game.character.maxHp} PV</strong></div> : null}
+            <button className="text-button" onClick={() => openPanel("sheet")}>{game.hasCharacter ? "Ver ficha" : "Criar ficha"} →</button>
+          </div>
+          {game.scene.revealUrl ? <button className="reveal-card" onClick={() => setRevealOpen(true)}><Sparkles size={17} /><span><small>O mestre revelou</small><strong>Ver imagem</strong></span></button> : null}
+        </section>
+      </div>
+
+      <button className={`chat-floating-button ${unreadChat ? "has-unread" : ""}`} onClick={() => openPanel("chat")} aria-label="Abrir chat da sessão"><MessageCircle />{unreadChat > 0 ? <span>{unreadChat > 99 ? "99+" : unreadChat}</span> : null}</button>
+
+      {panelOpen && activeTab ? <div className={`workspace-panel-layer ${panelPinned ? "pinned" : "overlay"}`} onMouseDown={(event) => { if (!panelPinned && event.target === event.currentTarget) closePanel(activeTab); }}>
+        <aside className="workspace-tabs-panel">
+          <header className="workspace-tabs-header">
+            <div className="workspace-tabs">{openTabs.map((tab) => { const Icon = panelIcons[tab]; return <button className={tab === activeTab ? "active" : ""} key={tab} onClick={() => { setActiveTab(tab); if (tab === "chat") setUnreadChat(0); }}><Icon size={14} /><span>{panelLabels[tab]}</span><i role="button" tabIndex={0} aria-label={`Fechar ${panelLabels[tab]}`} onClick={(event) => { event.stopPropagation(); closePanel(tab); }} onKeyDown={(event) => { if (event.key === "Enter") closePanel(tab); }}><X size={12} /></i></button>; })}</div>
+            <button className={panelPinned ? "active" : ""} onClick={() => setPanelPinned((value) => !value)} title={panelPinned ? "Desafixar painel" : "Fixar painel"}>{panelPinned ? <PinOff size={16} /> : <Pin size={16} />}</button>
+          </header>
+          <div className="workspace-tab-content">{renderPanel(activeTab)}</div>
+        </aside>
+      </div> : null}
+
+      {inviteOpen && game.isGM ? <InviteDialog campaign={campaign} onClose={() => setInviteOpen(false)} /> : null}
+      <MusicPlayer open={musicOpen} music={game.music} isGM={game.isGM} onSave={game.saveMusic} onPlayback={game.updateMusicPlayback} onOpen={() => setMusicOpen(true)} onClose={() => setMusicOpen(false)} />
+      {revealOpen && game.scene.revealUrl ? <div className="reveal-backdrop" onClick={() => setRevealOpen(false)}><button><X /></button><img src={game.scene.revealUrl} alt="Imagem revelada pelo mestre" /></div> : null}
+    </main>
+  );
+}

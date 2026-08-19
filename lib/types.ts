@@ -19,6 +19,15 @@ export type Campaign = {
   updatedAt: number;
 };
 
+export type CampaignMember = {
+  userId: string;
+  name: string;
+  avatarUrl?: string;
+  role: "gm" | "player";
+  joinedAt?: number;
+  lastSeenAt?: number;
+};
+
 export type Character = {
   id: string;
   ownerId: string;
@@ -88,6 +97,8 @@ export type MapToken = {
   color: string;
   imageUrl?: string;
   visionRadius?: number;
+  locked?: boolean;
+  lockedBy?: string;
   kind: "hero" | "monster";
 };
 
@@ -123,6 +134,15 @@ export type Scene = {
   fogEnabled?: boolean;
   visionRadius?: number;
   revealedAreas?: FogArea[];
+  visionMode?: "shared" | "individual";
+  ambientLight?: number;
+  movementBounds?: {
+    enabled: boolean;
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+  };
   dynamicLights?: LightSource[];
 };
 
@@ -135,13 +155,24 @@ export type ChatMessage = {
   imageUrl?: string;
   driveFileId?: string;
   spoiler?: boolean;
+  recipientId?: string;
+  recipientName?: string;
+  participantIds?: string[];
   createdAt: number;
 };
 
 export type CampaignJournal = {
   content: string;
+
   updatedBy?: string;
   updatedByName?: string;
+  updatedAt?: number;
+};
+
+export type CharacterNotes = {
+  content: string;
+  shareWithGM: boolean;
+  sharedWithPlayerIds: string[];
   updatedAt?: number;
 };
 

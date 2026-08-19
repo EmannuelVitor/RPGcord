@@ -54,6 +54,7 @@ type Props = {
   isGM: boolean;
   onSave: (music: CampaignMusic) => Promise<void>;
   onPlayback: (playing: boolean, position: number) => Promise<void>;
+  onOpen?: () => void;
   onClose: () => void;
 };
 
@@ -62,7 +63,7 @@ function formatTime(value: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-export function MusicPlayer({ open, music, isGM, onSave, onPlayback, onClose }: Props) {
+export function MusicPlayer({ open, music, isGM, onSave, onPlayback, onOpen = () => undefined, onClose }: Props) {
   const [draft, setDraft] = useState(music);
   const [error, setError] = useState<string>();
   const [ready, setReady] = useState(false);
@@ -76,6 +77,7 @@ export function MusicPlayer({ open, music, isGM, onSave, onPlayback, onClose }: 
   const musicRef = useRef(music);
   const audioEnabledRef = useRef(audioEnabled);
   const playbackRef = useRef(onPlayback);
+  const appliedPlayingRef = useRef<boolean | undefined>(undefined);
   const target = parseYouTubeUrl(music.youtubeUrl);
 
   useEffect(() => { musicRef.current = music; }, [music]);
@@ -94,9 +96,13 @@ export function MusicPlayer({ open, music, isGM, onSave, onPlayback, onClose }: 
     const shared = musicRef.current;
     const nextPosition = synchronizedPosition(shared);
     const current = player.getCurrentTime() || 0;
-    if (forceSeek || Math.abs(current - nextPosition) > 1.4) player.seekTo(nextPosition, true);
+    const drift = Math.abs(current - nextPosition);
+    if ((forceSeek && drift > 2.5) || (!forceSeek && drift > 6)) player.seekTo(nextPosition, true);
     player.setVolume(volume);
-    if (shared.playing) player.playVideo(); else player.pauseVideo();
+    if (appliedPlayingRef.current !== shared.playing) {
+      appliedPlayingRef.current = shared.playing;
+      if (shared.playing) player.playVideo(); else player.pauseVideo();
+    }
   }
 
   useEffect(() => {
@@ -139,6 +145,7 @@ export function MusicPlayer({ open, music, isGM, onSave, onPlayback, onClose }: 
       cancelled = true;
       playerRef.current?.destroy();
       playerRef.current = null;
+      appliedPlayingRef.current = undefined;
       container.replaceChildren();
     };
   }, [music.loop, music.youtubeUrl]);
@@ -146,7 +153,7 @@ export function MusicPlayer({ open, music, isGM, onSave, onPlayback, onClose }: 
   useEffect(() => {
     setPosition(synchronizedPosition(music));
     applySharedPlayback(true);
-  }, [music.playing, music.position, music.startedAt, music.updatedAt]);
+  }, [music.playing, music.position, music.startedAt]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -155,7 +162,7 @@ export function MusicPlayer({ open, music, isGM, onSave, onPlayback, onClose }: 
       const current = player.getCurrentTime() || 0;
       setPosition(current);
       setDuration(player.getDuration() || 0);
-      if (audioEnabledRef.current && musicRef.current.playing && Math.abs(current - synchronizedPosition()) > 1.5) applySharedPlayback(true);
+      if (audioEnabledRef.current && musicRef.current.playing && Math.abs(current - synchronizedPosition()) > 6) applySharedPlayback(false);
     }, 800);
     return () => window.clearInterval(timer);
   }, []);
@@ -189,20 +196,20 @@ export function MusicPlayer({ open, music, isGM, onSave, onPlayback, onClose }: 
 
   return (
     <>
-      {hasMusic && <section className={"music-floating " + (expanded ? "expanded" : "")} aria-label="Música sincronizada" onMouseEnter={() => setExpanded(true)} onMouseLeave={() => setExpanded(false)}>
+      <section className={"music-floating " + (expanded ? "expanded" : "")} aria-label="Música sincronizada" onMouseEnter={() => setExpanded(true)} onMouseLeave={() => setExpanded(false)}>
         <button className={"music-orb " + (music.playing ? "is-playing" : "")} onClick={() => setExpanded((value) => !value)} aria-label={expanded ? "Recolher player" : "Abrir player"}>
           {music.playing ? <Pause size={20} /> : <Music2 size={20} />}<i />
         </button>
         <div className="music-mini-panel">
           <header><span><Music2 size={15} /><strong>{music.title || "Trilha da campanha"}</strong></span><small>{music.playing ? "Tocando para a mesa" : "Pausada"}</small></header>
-          <div className="youtube-player-host hidden-youtube-player" ref={playerContainerRef} />
+          {hasMusic ? <><div className="youtube-player-host hidden-youtube-player" ref={playerContainerRef} />
           {!audioEnabled ? <button className="enable-sync-audio" onClick={enableAudio} disabled={!ready}><Volume2 size={15} /> Ativar áudio</button> : <div className="mini-player-controls">
             <div className="mini-track"><span>{formatTime(position)}</span><input type="range" min="0" max={Math.max(1, duration)} step="1" value={Math.min(position, Math.max(1, duration))} disabled={!isGM} onChange={(event) => { const nextPosition = Number(event.target.value); setPosition(nextPosition); playerRef.current?.seekTo(nextPosition, true); }} onPointerUp={() => isGM && void onPlayback(music.playing, position)} /><span>{formatTime(duration)}</span></div>
             <div className="mini-actions"><button className="sync-play" onClick={() => isGM ? void togglePlayback() : applySharedPlayback(true)}>{music.playing ? <Pause size={16} /> : <Play size={16} />}</button><Volume2 size={14} /><input className="volume-slider" type="range" min="0" max="100" value={volume} onChange={(event) => { const nextVolume = Number(event.target.value); setVolume(nextVolume); playerRef.current?.setVolume(nextVolume); }} />
             </div>
-          </div>}
+          </div>}</> : <button className="enable-sync-audio" onClick={onOpen}><Music2 size={15} /> {isGM ? "Escolher uma trilha" : "Nenhuma trilha selecionada"}</button>}
         </div>
-      </section>}
+      </section>
 
       {open && <div className="drawer-backdrop music-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
         <aside className="drawer music-drawer">

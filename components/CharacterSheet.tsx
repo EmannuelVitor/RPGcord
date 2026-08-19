@@ -7,7 +7,7 @@ import { toDirectDriveUrl } from "@/lib/drive";
 import { buildCharacterFields, syncLegacyCharacter } from "@/lib/sheet-template";
 import type { Character, SheetCategory, SheetFieldDefinition, SheetFieldValue, SheetStatusValue, SheetTemplate } from "@/lib/types";
 
-type Props = { campaignId: string; character: Character; template: SheetTemplate; onSave: (character: Character) => Promise<void>; onClose: () => void };
+type Props = { campaignId: string; character: Character; template: SheetTemplate; embedded?: boolean; onSave: (character: Character) => Promise<void>; onClose: () => void };
 
 const categoryLabels: Record<SheetCategory, string> = {
   attributes: "Atributos",
@@ -36,7 +36,7 @@ function RichTextInput({ value, placeholder, onChange }: { value: string; placeh
   </div>;
 }
 
-export function CharacterSheet({ campaignId, character, template, onSave, onClose }: Props) {
+export function CharacterSheet({ campaignId, character, template, embedded = false, onSave, onClose }: Props) {
   const [draft, setDraft] = useState<Character>(() => ({ ...character, customFields: buildCharacterFields(character, template) }));
   const [saved, setSaved] = useState(false);
   const [imageFile, setImageFile] = useState<File>();
@@ -105,11 +105,11 @@ export function CharacterSheet({ campaignId, character, template, onSave, onClos
     return <label className="dynamic-field"><span>{field.label}</span><input type={field.type === "number" ? "number" : "text"} min={field.min} max={field.max} value={field.type === "number" ? (typeof value === "number" ? value : 0) : (typeof value === "string" ? value : "")} placeholder={field.placeholder} onChange={(event) => updateValue(field, field.type === "number" ? Number(event.target.value) : event.target.value)} />{field.formula && <small className="field-formula">Fórmula: {field.formula}</small>}</label>;
   }
 
-  return <div className="drawer-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+  return <div className={"drawer-backdrop" + (embedded ? " embedded" : "")} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
     <form className="drawer sheet-drawer dynamic-sheet" onSubmit={submit}>
       <header><div><p className="eyebrow">Minha personagem</p><h2>{template.name}</h2></div><button type="button" className="icon-button" onClick={onClose} aria-label="Fechar"><X size={20} /></button></header>
       <div className="identity-fields">
-        <label className="wide">Nome<input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
+        <label className="wide">Nome<input required value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
         <label className="wide">Imagem da personagem<span className="image-link-field"><ImageIcon size={16} /><input placeholder="Link público da imagem ou do Google Drive" value={draft.imageUrl ?? ""} onChange={(event) => setDraft({ ...draft, imageUrl: event.target.value })} /></span></label>
         <label className="character-upload wide"><Upload size={17} /><span><strong>Enviar uma imagem</strong><small>JPG, PNG, WebP ou GIF — até 4 MB</small></span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(event) => setImageFile(event.target.files?.[0])} /></label>
         {(imagePreview || draft.imageUrl) && <div className="character-image-preview"><img src={imagePreview || toDirectDriveUrl(draft.imageUrl ?? "")} alt="Prévia da personagem" /></div>}

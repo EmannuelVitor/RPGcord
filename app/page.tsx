@@ -1,41 +1,13 @@
 "use client";
 
-import {
-  BookOpen,
-  ChevronDown,
-  Crown,
-  Dices,
-  HelpCircle,
-  LogOut,
-  Map as MapIcon,
-  Menu,
-  MessageCircle,
-  Music2,
-  ScrollText,
-  Settings,
-  Shield,
-  Sparkles,
-  UserPlus,
-  Users,
-  Wifi,
-  X,
-} from "lucide-react";
 import { useEffect, useState } from "react";
-import { Battlemap } from "@/components/Battlemap";
-import { CampaignJournal } from "@/components/CampaignJournal";
 import { CampaignHub } from "@/components/CampaignHub";
-import { CharacterSheet } from "@/components/CharacterSheet";
-import { DiceRoller } from "@/components/DiceRoller";
-import { GameMasterPanel } from "@/components/GameMasterPanel";
-import { InviteDialog } from "@/components/InviteDialog";
+import { GameWorkspace as WorkspaceView } from "@/components/GameWorkspace";
 import { LoginScreen } from "@/components/LoginScreen";
-import { MusicPlayer } from "@/components/MusicPlayer";
-import { SessionChat } from "@/components/SessionChat";
 import { TutorialModal } from "@/components/TutorialModal";
 import { useAuth } from "@/hooks/useAuth";
 import { useCampaigns } from "@/hooks/useCampaigns";
-import { useGameSession } from "@/hooks/useGameSession";
-import type { AppUser, Campaign } from "@/lib/types";
+import type { AppUser } from "@/lib/types";
 
 export default function Home() {
   const authentication = useAuth();
@@ -84,13 +56,14 @@ function CampaignController({ user, onSignOut }: { user: AppUser; onSignOut: () 
   }
   return (
     <>
-      <GameWorkspace user={user} campaign={campaignState.activeCampaign} onCampaigns={() => campaignState.selectCampaign(undefined)} onSignOut={onSignOut} onTutorial={() => setTutorialOpen(true)} />
+      <WorkspaceView user={user} campaign={campaignState.activeCampaign} onCampaigns={() => campaignState.selectCampaign(undefined)} onSignOut={onSignOut} onTutorial={() => setTutorialOpen(true)} />
       {tutorialOpen && <TutorialModal onClose={closeTutorial} />}
     </>
   );
 }
 
-function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutorial }: {
+/* Legacy workspace kept temporarily for migration reference.
+function LegacyGameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutorial }: {
   user: AppUser;
   campaign: Campaign;
   onCampaigns: () => void;
@@ -181,3 +154,4 @@ function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutorial }: {
     </main>
   );
 }
+*/

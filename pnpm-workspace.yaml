@@ -1,0 +1,7 @@
+confirmModulesPurge: false
+packageImportMethod: copy
+allowBuilds:
+  '@firebase/util': true
+  protobufjs: true
+  sharp: true
+  unrs-resolver: true

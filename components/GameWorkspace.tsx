@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
+import type { useTheme } from "@/hooks/useTheme";
 import { Battlemap } from "@/components/Battlemap";
 import { BrandMark } from "@/components/BrandMark";
 import { CampaignJournal } from "@/components/CampaignJournal";
@@ -100,11 +101,12 @@ function playChatNotification() {
   }
 }
 
-export function GameWorkspace({ user, campaign, onCampaigns, onRemoveMember, onSignOut, onTutorial }: {
+export function GameWorkspace({ user, campaign, onCampaigns, onRemoveMember, appearance, onSignOut, onTutorial }: {
   user: AppUser;
   campaign: Campaign;
   onCampaigns: () => void;
   onRemoveMember: (campaignId: string, memberId: string) => Promise<void>;
+  appearance: ReturnType<typeof useTheme>;
   onSignOut: () => Promise<void>;
   onTutorial: () => void;
 }) {
@@ -117,7 +119,6 @@ export function GameWorkspace({ user, campaign, onCampaigns, onRemoveMember, onS
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [revealOpen, setRevealOpen] = useState(false);
   const [participantsOpen, setParticipantsOpen] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [unreadChat, setUnreadChat] = useState(0);
   const [unreadWhispers, setUnreadWhispers] = useState<Record<string, number>>({});
   const lastMessageRef = useRef<string | undefined>(undefined);
@@ -158,16 +159,6 @@ export function GameWorkspace({ user, campaign, onCampaigns, onRemoveMember, onS
     lastWhisperRef.current = undefined;
     knownWhisperPartnersRef.current = new Set();
   }, [campaign.id]);
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem("rpgcord.theme");
-    if (stored === "dark") setTheme("dark");
-  }, []);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem("rpgcord.theme", theme);
-  }, [theme]);
 
   useEffect(() => {
     const latest = game.chatMessages.at(-1);
@@ -268,7 +259,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onRemoveMember, onS
     if (panel === "journal") return <CampaignJournal embedded journal={game.journal} isGM={game.isGM} onSave={game.saveJournal} onClose={() => closePanel("journal")} />;
     if (panel === "notes") return <PlayerNotes embedded notes={game.notes} participants={game.participants} userId={user.id} onSave={game.saveNotes} onClose={() => closePanel("notes")} />;
     if (panel === "music") return <MusicPanel embedded music={game.music} isGM={game.isGM} onSave={game.saveMusic} onClose={() => closePanel("music")} />;
-    if (panel === "settings") return <SettingsPanel embedded theme={theme} onTheme={setTheme} onClose={() => closePanel("settings")} />;
+    if (panel === "settings") return <SettingsPanel embedded appearance={appearance} onClose={() => closePanel("settings")} />;
     if (panel === "gm" && game.isGM) return <GameMasterPanel embedded scene={game.scene} tokens={game.tokens} sheetTemplate={game.sheetTemplate} ownerId={user.id} onSaveScene={game.saveScene} onSaveSheetTemplate={game.saveSheetTemplate} onAddToken={game.addToken} onRemoveToken={game.removeToken} onSetTokenHidden={game.setTokenHidden} onClose={() => closePanel("gm")} />;
     return null;
   }

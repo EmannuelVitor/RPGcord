@@ -6,11 +6,13 @@ import { GameWorkspace as WorkspaceView } from "@/components/GameWorkspace";
 import { LoginScreen } from "@/components/LoginScreen";
 import { TutorialModal } from "@/components/TutorialModal";
 import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/hooks/useTheme";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import type { AppUser } from "@/lib/types";
 
 export default function Home() {
   const authentication = useAuth();
+  const appearance = useTheme();
   const [loginTutorialOpen, setLoginTutorialOpen] = useState(false);
   if (!authentication.user) {
     return (
@@ -20,10 +22,10 @@ export default function Home() {
       </>
     );
   }
-  return <CampaignController user={authentication.user} onSignOut={authentication.signOutUser} />;
+  return <CampaignController user={authentication.user} appearance={appearance} onSignOut={authentication.signOutUser} />;
 }
 
-function CampaignController({ user, onSignOut }: { user: AppUser; onSignOut: () => Promise<void> }) {
+function CampaignController({ user, appearance, onSignOut }: { user: AppUser; appearance: ReturnType<typeof useTheme>; onSignOut: () => Promise<void> }) {
   const campaignState = useCampaigns(user);
   const [tutorialOpen, setTutorialOpen] = useState(false);
 
@@ -58,7 +60,7 @@ function CampaignController({ user, onSignOut }: { user: AppUser; onSignOut: () 
   }
   return (
     <>
-      <WorkspaceView user={user} campaign={campaignState.activeCampaign} onCampaigns={() => campaignState.selectCampaign(undefined)} onRemoveMember={campaignState.removeMember} onSignOut={onSignOut} onTutorial={() => setTutorialOpen(true)} />
+      <WorkspaceView user={user} campaign={campaignState.activeCampaign} onCampaigns={() => campaignState.selectCampaign(undefined)} onRemoveMember={campaignState.removeMember} appearance={appearance} onSignOut={onSignOut} onTutorial={() => setTutorialOpen(true)} />
       {tutorialOpen && <TutorialModal onClose={closeTutorial} />}
     </>
   );

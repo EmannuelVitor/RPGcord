@@ -30,6 +30,8 @@ export type CampaignMember = {
   present?: boolean;
   /** Personagem vinculado à conta; null representa uma opção explícita por jogar sem ficha. */
   characterId?: string | null;
+  typingConversationId?: string;
+  typingAt?: number;
 };
 
 export type Character = {
@@ -170,7 +172,9 @@ export type ChatMessage = {
   recipientName?: string;
   participantIds?: string[];
   conversationId?: string;
+  mentionIds?: string[];
   createdAt: number;
+  editedAt?: number;
 };
 
 export type CampaignJournal = {

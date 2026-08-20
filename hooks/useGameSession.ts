@@ -209,6 +209,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
         id: item.id,
         ...item.data(),
         createdAt: item.data().createdAt?.toMillis?.() ?? Date.now(),
+        editedAt: item.data().editedAt?.toMillis?.() ?? undefined,
       }) as ChatMessage).reverse()),
       () => setSyncError("O chat da sessão não pôde ser sincronizado."),
     );
@@ -218,6 +219,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
         id: item.id,
         ...item.data(),
         createdAt: item.data().createdAt?.toMillis?.() ?? Date.now(),
+        editedAt: item.data().editedAt?.toMillis?.() ?? undefined,
       }) as ChatMessage).sort((a, b) => a.createdAt - b.createdAt)),
       () => setSyncError("Os sussurros da sessão não puderam ser sincronizados."),
     );
@@ -229,6 +231,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
         present: item.data().present !== false,
         lastSeenAt: item.data().lastSeenAt?.toMillis?.() ?? undefined,
         joinedAt: item.data().joinedAt?.toMillis?.() ?? undefined,
+        typingAt: item.data().typingAt?.toMillis?.() ?? undefined,
       }) as CampaignMember)),
       () => setSyncError("Os participantes não puderam ser sincronizados."),
     );
@@ -265,7 +268,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
     }, { merge: true });
     // Marcar a saida evita que o jogador continue "na mesa" ate o batimento
     // expirar. O pagehide e melhor esforco: pode nao completar se a aba morrer.
-    const markAway = () => void setDoc(memberRef, { present: false }, { merge: true });
+    const markAway = () => void setDoc(memberRef, { present: false, typingConversationId: "", typingAt: null }, { merge: true });
     void refreshPresence();
     const presenceTimer = window.setInterval(() => void refreshPresence(), 25000);
     window.addEventListener("pagehide", markAway);
@@ -494,7 +497,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
     if (online && db) await setDoc(doc(db, "campaigns", campaignId, "tokens", tokenId), { visionRadius: normalized }, { merge: true });
   }, [campaignId, online]);
 
-  const sendChatMessage = useCallback(async (text: string, image?: { imageUrl: string; driveFileId: string }, spoiler = false, recipient?: CampaignMember) => {
+  const sendChatMessage = useCallback(async (text: string, image?: { imageUrl: string; driveFileId: string }, spoiler = false, recipient?: CampaignMember, mentionIds: string[] = []) => {
     const cleanText = text.trim().slice(0, 2000);
     if (!cleanText && !image) return;
     const whisperParticipantIds = recipient ? [user.id, recipient.userId].sort() : undefined;
@@ -504,6 +507,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
       userName: user.name,
       text: cleanText,
       createdAt: Date.now(),
+      mentionIds: Array.from(new Set(mentionIds)).filter((id) => participants.some((member) => member.userId === id)).slice(0, 20),
       ...(user.avatarUrl ? { userAvatarUrl: user.avatarUrl } : {}),
       ...(image ? image : {}),
       ...(image && spoiler ? { spoiler: true } : {}),
@@ -517,7 +521,32 @@ export function useGameSession(campaignId: string, user: AppUser) {
     const { id: _id, createdAt: _createdAt, ...payload } = next;
     const collectionName = recipient ? "whispers" : "chatMessages";
     await addDoc(collection(db, "campaigns", campaignId, collectionName), { ...payload, createdAt: serverTimestamp() });
-  }, [campaignId, online, user.avatarUrl, user.id, user.name]);
+  }, [campaignId, online, participants, user.avatarUrl, user.id, user.name]);
+
+  const editChatMessage = useCallback(async (message: ChatMessage, text: string) => {
+    if (message.userId !== user.id) throw new Error("Você só pode editar suas próprias mensagens.");
+    const cleanText = text.trim().slice(0, 2000);
+    if (!cleanText && !message.imageUrl) throw new Error("A mensagem não pode ficar vazia.");
+    const editedAt = Date.now();
+    const update = (current: ChatMessage[]) => current.map((item) => item.id === message.id ? { ...item, text: cleanText, editedAt } : item);
+    if (message.recipientId) setWhisperMessages(update); else setChatMessages(update);
+    if (online && db) await updateDoc(doc(db, "campaigns", campaignId, message.recipientId ? "whispers" : "chatMessages", message.id), { text: cleanText, editedAt: serverTimestamp() });
+  }, [campaignId, online, user.id]);
+
+  const deleteChatMessage = useCallback(async (message: ChatMessage) => {
+    if (message.userId !== user.id && gmId !== user.id) throw new Error("Você não pode excluir esta mensagem.");
+    const remove = (current: ChatMessage[]) => current.filter((item) => item.id !== message.id);
+    if (message.recipientId) setWhisperMessages(remove); else setChatMessages(remove);
+    if (online && db) await deleteDoc(doc(db, "campaigns", campaignId, message.recipientId ? "whispers" : "chatMessages", message.id));
+  }, [campaignId, gmId, online, user.id]);
+
+  const setTyping = useCallback(async (conversationId?: string) => {
+    setParticipants((current) => current.map((member) => member.userId === user.id ? { ...member, typingConversationId: conversationId ?? "", typingAt: conversationId ? Date.now() : undefined } : member));
+    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "members", user.id), {
+      typingConversationId: conversationId ?? "",
+      typingAt: conversationId ? serverTimestamp() : null,
+    }, { merge: true });
+  }, [campaignId, online, user.id]);
 
   const saveJournal = useCallback(async (content: string) => {
     const next: CampaignJournal = { content: content.slice(0, 20000), updatedBy: user.id, updatedByName: user.name, updatedAt: Date.now() };
@@ -603,6 +632,6 @@ export function useGameSession(campaignId: string, user: AppUser) {
 
   return useMemo(() => ({
     character, characters, hasCharacter, rolls, tokens, scene, journal, music, initiative, sheetTemplate, chatMessages, whisperMessages, notes, participants, isGM: gmId === user.id, online, syncError,
-    saveCharacter, assignCharacter, rollDie, moveToken, toggleTokenLock, addToken, removeToken, setTokenHidden, saveScene, clearRevealed, commitRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveInitiative, saveMusic, updateMusicPlayback,
-  }), [addToken, assignCharacter, character, characters, chatMessages, clearChat, clearRevealed, commitRevealed, setTokenHidden, createLight, deleteLight, gmId, hasCharacter, initiative, journal, moveLight, moveToken, music, notes, online, participants, removeToken, rollDie, rolls, saveCharacter, saveInitiative, saveJournal, saveMusic, saveNotes, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, sheetTemplate, syncError, toggleTokenLock, tokens, updateLight, updateMusicPlayback, user.id, whisperMessages]);
+    saveCharacter, assignCharacter, rollDie, moveToken, toggleTokenLock, addToken, removeToken, setTokenHidden, saveScene, clearRevealed, commitRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, editChatMessage, deleteChatMessage, setTyping, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveInitiative, saveMusic, updateMusicPlayback,
+  }), [addToken, assignCharacter, character, characters, chatMessages, clearChat, clearRevealed, commitRevealed, setTokenHidden, createLight, deleteChatMessage, deleteLight, editChatMessage, gmId, hasCharacter, initiative, journal, moveLight, moveToken, music, notes, online, participants, removeToken, rollDie, rolls, saveCharacter, saveInitiative, saveJournal, saveMusic, saveNotes, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, setTyping, sheetTemplate, syncError, toggleTokenLock, tokens, updateLight, updateMusicPlayback, user.id, whisperMessages]);
 }

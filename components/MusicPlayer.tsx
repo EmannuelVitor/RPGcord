@@ -143,11 +143,16 @@ export function MusicPlayer({ music, isGM, onPlayback, onOpen }: Props) {
       appliedPlayingRef.current = undefined;
       container.replaceChildren();
     };
+    // Recria o player so quando a faixa ou o loop mudam: incluir as demais
+    // dependencias reiniciaria a reproducao a cada ajuste de volume ou posicao.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [music.loop, music.youtubeUrl]);
 
   useEffect(() => {
     setPosition(synchronizedPosition(music));
     applySharedPlayback(true);
+    // Reage apenas ao estado compartilhado pelo mestre.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [music.playing, music.position, music.startedAt]);
 
   useEffect(() => {
@@ -160,6 +165,8 @@ export function MusicPlayer({ music, isGM, onPlayback, onOpen }: Props) {
       if (audioEnabledRef.current && musicRef.current.playing && Math.abs(current - synchronizedPosition()) > 6) applySharedPlayback(false);
     }, 800);
     return () => window.clearInterval(timer);
+    // O intervalo le tudo por referencia; recriar a cada render zeraria o relogio.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function togglePlayback() {

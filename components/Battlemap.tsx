@@ -85,7 +85,6 @@ export function Battlemap(props: Props) {
     const end = Math.max(.5, Math.min(3, target)); zoomTarget.current = end;
     if (zoomFrame.current) cancelAnimationFrame(zoomFrame.current);
     const start = zoomRef.current, time = performance.now(), before = map.getBoundingClientRect();
-    void scroller;
     const focusX = x ?? before.left + before.width / 2, focusY = y ?? before.top + before.height / 2;
     const mapX = Math.max(0, Math.min(1, (focusX - before.left) / before.width)), mapY = Math.max(0, Math.min(1, (focusY - before.top) / before.height));
     zoomAnchor.current = { x: focusX, y: focusY, mapX, mapY };
@@ -144,7 +143,8 @@ export function Battlemap(props: Props) {
   function saveLight(event: FormEvent) {
     event.preventDefault(); if (!editor) return;
     const light = { ...editor.light, dimRadius: dim(editor.light), brightRadius: bright(editor.light) };
-    editor.mode === "create" ? onCreateLight(light) : onUpdateLight(light); setEditor(undefined); setLightMode(false);
+    if (editor.mode === "create") onCreateLight(light); else onUpdateLight(light);
+    setEditor(undefined); setLightMode(false);
   }
 
   function playerNameOf(token: MapToken) {
@@ -158,7 +158,10 @@ export function Battlemap(props: Props) {
     return composeName(token.name, playerNameOf(token), "both") || token.name;
   }
 
-  const storedLights = scene.dynamicLights ?? [], vision = scene.visionRadius ?? 14;
+  // Referencia estavel: "?? []" cria um array novo a cada render e invalidaria
+  // as memorizacoes que dependem das luzes.
+  const storedLights = useMemo(() => scene.dynamicLights ?? [], [scene.dynamicLights]);
+  const vision = scene.visionRadius ?? 14;
   // Esc desfaz a camada aberta mais recente antes de sair dos modos de edicao.
   useEscapeKey(useCallback(() => {
     if (editor) { setEditor(undefined); return; }

@@ -13,6 +13,7 @@ firebase-debug.log
 
 .vercel
 .env*
+!.env.example
 
 # Ferramentas de IA / ambiente local do agente
 .claude/

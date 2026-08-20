@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" width="320" height="80" role="img" aria-label="RPGcord">
+  <g transform="translate(6 8)"><defs>
+    <linearGradient id="rpgcSeal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#45376d"/><stop offset="1" stop-color="#8b73d8"/></linearGradient>
+    <linearGradient id="rpgcDie" x1=".15" y1="0" x2=".85" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#eadcff"/></linearGradient>
+  </defs>
+  <g transform="rotate(45 32 32)">
+    <rect x="12" y="12" width="40" height="40" rx="9.984" fill="url(#rpgcSeal)"/>
+    <rect x="12" y="12" width="40" height="40" rx="9.984" fill="none" stroke="#d5c9f4" stroke-opacity=".5" stroke-width="1.472"/>
+  </g>
+  <g fill="none" stroke="url(#rpgcDie)" stroke-width="2.112" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M32.00 19.01 L43.25 25.50 L43.25 38.50 L32.00 44.99 L20.75 38.50 L20.75 25.50 Z"/>
+    <path d="M32.00 25.50 L37.63 35.25 L26.37 35.25 Z" fill="#ffffff" fill-opacity=".2"/>
+    <path d="M32.00 25.50 L32.00 19.01"/>
+    <path d="M26.37 35.25 L20.75 38.50"/>
+    <path d="M37.63 35.25 L43.25 38.50"/>
+    <path d="M32.00 25.50 L43.25 25.50"/>
+    <path d="M37.63 35.25 L32.00 44.99"/>
+    <path d="M26.37 35.25 L20.75 25.50"/>
+  </g>
+  <path d="M48.768 10.24 Q49.978880000000004 14.53312 54.272 15.744 Q49.978880000000004 16.95488 48.768 21.247999999999998 Q47.55712 16.95488 43.264 15.744 Q47.55712 14.53312 48.768 10.24 Z" fill="#f0d9a6" opacity="0.95"/>
+</g>
+  <text x="84" y="43" font-family="Georgia, 'Times New Roman', serif" font-size="34" fill="#2d2840">RPG<tspan fill="#7259c7">cord</tspan></text>
+  <text x="86" y="60" font-family="Inter, Segoe UI, system-ui, sans-serif" font-size="9.5" letter-spacing="3.1" fill="#8a80a0">MESA DE RPG AO VIVO</text>
+</svg>

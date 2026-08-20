@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="RPGcord">
+  <defs>
+    <linearGradient id="rpgcBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b2245"/><stop offset=".55" stop-color="#45376d"/><stop offset="1" stop-color="#7259c7"/></linearGradient>
+    <radialGradient id="rpgcHalo" cx=".5" cy=".46" r=".55"><stop offset="0" stop-color="#a987e5" stop-opacity=".55"/><stop offset="1" stop-color="#a987e5" stop-opacity="0"/></radialGradient>
+    <linearGradient id="rpgcDie2" x1=".15" y1="0" x2=".85" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#eadcff"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112.64" fill="url(#rpgcBg)"/>
+  <rect width="512" height="512" rx="112.64" fill="url(#rpgcHalo)"/>
+  <g transform="rotate(45 256 258)">
+    <rect x="86" y="88" width="340" height="340" rx="58" fill="none" stroke="#d5c9f4" stroke-opacity=".38" stroke-width="9"/>
+  </g>
+  <g fill="none" stroke="url(#rpgcDie2)" stroke-width="20" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M256.00 126.00 L370.32 192.00 L370.32 324.00 L256.00 390.00 L141.68 324.00 L141.68 192.00 Z"/>
+    <path d="M256.00 192.00 L313.16 291.00 L198.84 291.00 Z" fill="#ffffff" fill-opacity=".2"/>
+    <path d="M256.00 192.00 L256.00 126.00"/>
+    <path d="M198.84 291.00 L141.68 324.00"/>
+    <path d="M313.16 291.00 L370.32 324.00"/>
+    <path d="M256.00 192.00 L370.32 192.00"/>
+    <path d="M313.16 291.00 L256.00 390.00"/>
+    <path d="M198.84 291.00 L141.68 192.00"/>
+  </g>
+  <path d="M384 102 Q390.6 125.4 414 132 Q390.6 138.6 384 162 Q377.4 138.6 354 132 Q377.4 125.4 384 102 Z" fill="#f0d9a6" opacity="0.95"/>
+  <path d="M120 353 Q124.18 367.82 139 372 Q124.18 376.18 120 391 Q115.82 376.18 101 372 Q115.82 367.82 120 353 Z" fill="#eadcff" opacity="0.7"/>
+</svg>

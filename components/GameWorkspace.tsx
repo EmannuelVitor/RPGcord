@@ -340,7 +340,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
       <button className={`chat-floating-button ${totalUnread ? "has-unread" : ""}`} onClick={() => openPanel("chat")} aria-label="Abrir chat da sessão"><MessageCircle />{totalUnread > 0 ? <span>{totalUnread > 99 ? "99+" : totalUnread}</span> : null}</button>
 
       {panelOpen && activeTab ? <div className={`workspace-panel-layer ${panelPinned ? "pinned" : "overlay"}`} onMouseDown={(event) => { if (!panelPinned && event.target === event.currentTarget) closePanel(activeTab); }}>
-        {panelPinned ? <button className="panel-resizer workspace-panel-resizer" aria-label="Redimensionar painel lateral" onPointerDown={(event) => startResize("right", event)} /> : null}
+        <button className="panel-resizer workspace-panel-resizer" aria-label="Redimensionar painel lateral direito" title="Arraste para redimensionar o painel" onPointerDown={(event) => startResize("right", event)} />
         <aside className="workspace-tabs-panel">
           <header className="workspace-tabs-header">
             <div className="workspace-tabs">{openTabs.map((tab) => {

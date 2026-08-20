@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Dices, Minus, Plus, ScrollText, Sparkles } from "lucide-react";
+import { ArrowRight, Dices, Minus, Plus, ScrollText, Sparkles, UserRound } from "lucide-react";
 import { useMemo, useState } from "react";
 import { characterNameOf, composeName } from "@/lib/display-name";
 import { VALIDATION_LABELS } from "@/lib/dice";
@@ -43,8 +43,9 @@ export function DiceRoller({ rolls, tokens = [], character, template, hasCharact
       });
   }, [character, template]);
 
-  const characterName = character.name.trim() || "Crie sua personagem";
-  const initials = characterName.split(/s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  const savedCharacterName = character.name.trim();
+  const characterName = savedCharacterName || "Crie sua personagem";
+  const initials = savedCharacterName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
   const [selected, setSelected] = useState(20);
   const [modifier, setModifier] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -64,7 +65,7 @@ export function DiceRoller({ rolls, tokens = [], character, template, hasCharact
     <aside className="dice-card panel">
       <section className={"dice-character" + (hasCharacter ? "" : " empty")}>
         <div className="dice-character-head">
-          <span className="dice-portrait">{character.imageUrl ? <img src={character.imageUrl} alt="" /> : initials}</span>
+          <span className="dice-portrait">{character.imageUrl ? <img src={character.imageUrl} alt="" /> : initials || <UserRound size={22} aria-hidden="true" />}</span>
           <div>
             <p className="eyebrow">Seu personagem</p>
             <strong>{characterName}{hasCharacter ? <>{" "}<em>({playerName})</em></> : null}</strong>

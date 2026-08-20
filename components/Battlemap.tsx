@@ -1,6 +1,6 @@
 "use client";
 
-import { CloudFog, Eraser, Eye, EyeOff, Lightbulb, Lock, Minus, Paintbrush, Plus, RotateCcw, ScrollText, Shield, SlidersHorizontal, Sun, Swords, Tag, Trash2, Unlock, Users, X } from "lucide-react";
+import { CloudFog, Eraser, Eye, EyeOff, Github, Lightbulb, Lock, Minus, Paintbrush, Plus, RotateCcw, ScrollText, Shield, SlidersHorizontal, Sun, Swords, Tag, Trash2, Unlock, Users, X } from "lucide-react";
 import { FormEvent, MouseEvent as ReactMouseEvent, PointerEvent, WheelEvent, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { NAME_DISPLAY_MODES, NAME_DISPLAY_STORAGE_KEY, composeName, isNameDisplayMode, type NameDisplayMode } from "@/lib/display-name";
@@ -283,5 +283,9 @@ export function Battlemap(props: Props) {
       {isGM && scene.fogEnabled && visionOpen && <div className="fog-live-controls"><header><div><SlidersHorizontal size={15} /><strong>Visão em tempo real</strong></div><button onClick={() => setVisionOpen(false)}><X size={15} /></button></header><label><span>Todos os jogadores <b>{globalVision}%</b></span><input type="range" min="3" max="45" value={globalVision} onChange={(event) => setGlobalVision(Number(event.target.value))} onPointerUp={() => onSetGlobalVision(globalVision)} /></label>{selectedToken && (() => { const token = tokens.find((item) => item.id === selectedToken); return token ? <div className="individual-vision"><p><strong>{token.name}</strong><button onClick={() => onSetTokenVision(token.id, undefined)}>Usar global</button></p><label><span>Visão individual <b>{individualVision}%</b></span><input type="range" min="3" max="45" value={individualVision} onChange={(event) => setIndividualVision(Number(event.target.value))} onPointerUp={() => onSetTokenVision(token.id, individualVision)} /></label></div> : null; })()}</div>}
       <div className="map-hint">{!hasCharacter ? <><ScrollText size={14} /> Crie e salve sua ficha para gerar o pino</> : lightMode ? <><Lightbulb size={14} /> Clique no mapa para configurar uma luz</> : brush ? <><Paintbrush size={14} /> Arraste sobre o mapa para {brush === "reveal" ? "revelar" : "encobrir"} · pincel de {brushSize}%</> : <><Eye size={14} /> Arraste o fundo para mover · roda para ampliar · duplo clique no pino para bloquear</>}</div>
     </div>
+    <footer className="map-credits" aria-label="Créditos do RPGcord">
+      <Github size={13} aria-hidden="true" />
+      <span>RPGcord por <a href="https://github.com/ErickMascarenhas" target="_blank" rel="noreferrer">Erick Mascarenhas</a> e <a href="https://github.com/EmannuelVitor" target="_blank" rel="noreferrer">Emannuel Vitor</a></span>
+    </footer>
   </section>;
 }

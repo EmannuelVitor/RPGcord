@@ -39,11 +39,10 @@ html[data-theme="dark"] .chat-mention { background:#4a386c;color:#e4d8ff; }
 
 @media (max-width:1100px) {
   .workspace-panel-layer.pinned { inset:0;width:auto;background:rgba(29,20,49,.36);backdrop-filter:blur(2px); }
-  .workspace-panel-layer.pinned .workspace-tabs-panel { width:min(620px,100%); }
+  .workspace-panel-layer.pinned .workspace-tabs-panel { width:min(var(--panel-width),100%); }
   .app-shell.panel-pinned .workspace,.app-shell.sidebar-collapsed.panel-pinned .workspace { width:calc(100% - var(--sidebar-width));margin-right:0; }
   .app-shell.sidebar-collapsed.panel-pinned .workspace { width:100%; }
   .app-shell.panel-pinned .music-floating { right:20px; }
-  .workspace-panel-resizer { display:none; }
 }
 @media (max-width:800px) {
   .sidebar-toggle { display:none; }
@@ -52,5 +51,5 @@ html[data-theme="dark"] .chat-mention { background:#4a386c;color:#e4d8ff; }
   .participants-popover { right:8px;top:66px;width:min(300px,calc(100vw - 16px)); }
   .chat-floating-button { right:12px;bottom:12px; }
   .movement-bounds-grid { grid-template-columns:1fr 1fr; }
-  .sidebar-resizer { display:none; }
+  .sidebar-resizer,.workspace-panel-resizer { display:none; }
 }

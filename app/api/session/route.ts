@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminAuth } from "@/lib/firebase-admin";
 import { clientKey, rateLimit, tooManyRequests } from "@/lib/rate-limit";
+import { sessionContextOf, sessionCookieOptions } from "@/lib/session-cookie";
 
 export const runtime = "nodejs";
 const SESSION_COOKIE_NAME = "rpgcord_session";
@@ -16,27 +17,15 @@ export async function POST(request: Request) {
     await getAdminAuth().verifyIdToken(idToken);
     const sessionCookie = await getAdminAuth().createSessionCookie(idToken, { expiresIn: SESSION_DURATION_MS });
     const response = NextResponse.json({ ok: true });
-    response.cookies.set(SESSION_COOKIE_NAME, sessionCookie, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: SESSION_DURATION_MS / 1000,
-    });
+    response.cookies.set(SESSION_COOKIE_NAME, sessionCookie, sessionCookieOptions(sessionContextOf(request), SESSION_DURATION_MS / 1000));
     return response;
   } catch {
     return NextResponse.json({ error: "Não foi possível criar a sessão protegida." }, { status: 401 });
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
   const response = NextResponse.json({ ok: true });
-  response.cookies.set(SESSION_COOKIE_NAME, "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0,
-  });
+  response.cookies.set(SESSION_COOKIE_NAME, "", sessionCookieOptions(sessionContextOf(request), 0));
   return response;
 }

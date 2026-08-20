@@ -29,7 +29,7 @@ export function useResizablePanels() {
   }, []);
 
   const startResize = useCallback((side: "left" | "right", event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (window.innerWidth <= (side === "right" ? 1100 : 800)) return;
+    if (window.innerWidth <= 800) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     const previousCursor = document.body.style.cursor;

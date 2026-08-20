@@ -37,8 +37,8 @@ export function SettingsPanel({ appearance, embedded = false, onClose }: Props) 
 
           <h3>Créditos</h3>
           <div className="credits-list">
-            <a href="https://github.com/ErickMascarenhas" target="_blank" rel="noreferrer"><Github size={17} /><span><strong>Erick Mascarenhas</strong><small>Desenvolvimento e direção do projeto</small></span><ExternalLink size={14} /></a>
-            <a href="https://github.com/EmannuelVitor" target="_blank" rel="noreferrer"><Github size={17} /><span><strong>Emannuel Vitor</strong><small>Desenvolvimento e colaboração</small></span><ExternalLink size={14} /></a>
+            <a href="https://github.com/ErickMascarenhas" target="_blank" rel="noreferrer"><Github size={17} /><span><strong>Erick Mascarenhas</strong><small>Desenvolvimento e colaboração</small></span><ExternalLink size={14} /></a>
+            <a href="https://github.com/EmannuelVitor" target="_blank" rel="noreferrer"><Github size={17} /><span><strong>Emannuel Vitor</strong><small>Desenvolvimento e direção do projeto</small></span><ExternalLink size={14} /></a>
           </div>
         </section>
       </aside>

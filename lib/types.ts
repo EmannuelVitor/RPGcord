@@ -28,11 +28,15 @@ export type CampaignMember = {
   lastSeenAt?: number;
   /** Falso quando a aba foi fechada de forma limpa. */
   present?: boolean;
+  /** Personagem vinculado à conta; null representa uma opção explícita por jogar sem ficha. */
+  characterId?: string | null;
 };
 
 export type Character = {
   id: string;
   ownerId: string;
+  /** Contas que podem usar e editar a mesma personagem. */
+  controllerIds?: string[];
   name: string;
   ancestry: string;
   characterClass: string;
@@ -92,6 +96,8 @@ export type DiceRoll = {
 export type MapToken = {
   id: string;
   ownerId: string;
+  /** Contas autorizadas a controlar este pino de personagem. */
+  controllerIds?: string[];
   name: string;
   initials: string;
   x: number;

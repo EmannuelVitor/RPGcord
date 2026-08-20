@@ -314,7 +314,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
             {game.scene.revealUrl ? <button className="outline-button reveal-top" onClick={() => setRevealOpen(true)} title="Ver a imagem revelada pelo mestre"><Sparkles size={16} /> Revelação</button> : null}
             <button className="outline-button back-home-button" onClick={onCampaigns}><ArrowLeft size={16} /> Voltar ao início</button>
           </div>
-          {participantsOpen ? <ParticipantsPopover members={game.participants} tokens={game.tokens} currentUserId={user.id} ownerId={campaign.ownerId} isGM={game.isGM} onRemove={(memberId) => void onRemoveMember(campaign.id, memberId)} onClose={() => setParticipantsOpen(false)} /> : null}
+          {participantsOpen ? <ParticipantsPopover members={game.participants} characters={game.characters} tokens={game.tokens} currentUserId={user.id} ownerId={campaign.ownerId} isGM={game.isGM} onAssignCharacter={game.assignCharacter} onRemove={async (memberId) => { await game.assignCharacter(memberId, undefined); await onRemoveMember(campaign.id, memberId); }} onClose={() => setParticipantsOpen(false)} /> : null}
         </header>
 
         {(game.syncError || (!game.hasCharacter && !game.isGM)) ? (
@@ -324,7 +324,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
         ) : null}
 
         <div className="content-grid">
-          <Battlemap scene={game.scene} tokens={game.tokens} participants={game.participants} userId={user.id} isGM={game.isGM} hasCharacter={game.hasCharacter} onMove={game.moveToken} onToggleTokenLock={game.toggleTokenLock} onRequestCharacter={() => openPanel("sheet")} onClearRevealed={game.clearRevealed} onCommitRevealed={game.commitRevealed} onMoveLight={game.moveLight} onCreateLight={game.createLight} onUpdateLight={game.updateLight} onDeleteLight={game.deleteLight} onSetGlobalVision={game.setGlobalVision} onSetTokenVision={game.setTokenVision} />
+          <Battlemap scene={game.scene} tokens={game.tokens} participants={game.participants} userId={user.id} isGM={game.isGM} hasCharacter={game.hasCharacter || game.isGM} onMove={game.moveToken} onToggleTokenLock={game.toggleTokenLock} onRequestCharacter={() => openPanel("sheet")} onClearRevealed={game.clearRevealed} onCommitRevealed={game.commitRevealed} onMoveLight={game.moveLight} onCreateLight={game.createLight} onUpdateLight={game.updateLight} onDeleteLight={game.deleteLight} onSetGlobalVision={game.setGlobalVision} onSetTokenVision={game.setTokenVision} />
           <DiceRoller rolls={game.rolls} tokens={game.tokens} character={game.character} template={game.sheetTemplate} hasCharacter={game.hasCharacter} playerName={user.name} onOpenSheet={() => openPanel("sheet")} onRoll={game.rollDie} />
         </div>
 
@@ -359,7 +359,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
 
       {inviteOpen && game.isGM ? <InviteDialog campaign={campaign} onClose={() => setInviteOpen(false)} /> : null}
       {musicOpen ? <MusicPanel music={game.music} isGM={game.isGM} onSave={game.saveMusic} onClose={() => setMusicOpen(false)} /> : null}
-      {detailsOpen ? <CampaignDetailsDialog campaign={campaign} isGM={game.isGM} onClose={() => setDetailsOpen(false)} onLeave={() => onLeaveCampaign(campaign.id)} onDelete={() => onDeleteCampaign(campaign.id)} /> : null}
+      {detailsOpen ? <CampaignDetailsDialog campaign={campaign} isGM={game.isGM} onClose={() => setDetailsOpen(false)} onLeave={async () => { await game.assignCharacter(user.id, undefined); await onLeaveCampaign(campaign.id); }} onDelete={() => onDeleteCampaign(campaign.id)} /> : null}
       <MusicPlayer music={game.music} isGM={game.isGM} onPlayback={game.updateMusicPlayback} onOpen={openMusic} />
       {revealOpen && game.scene.revealUrl ? <div className="reveal-backdrop" role="dialog" aria-modal="true" aria-label="Imagem revelada pelo mestre" onClick={() => setRevealOpen(false)}><button><X /></button><img src={game.scene.revealUrl} alt="Imagem revelada pelo mestre" /></div> : null}
     </main>

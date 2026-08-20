@@ -31,7 +31,7 @@ export function isNameDisplayMode(value: unknown): value is NameDisplayMode {
  */
 export function characterNameOf(userId: string | undefined, tokens: MapToken[]) {
   if (!userId) return undefined;
-  const token = tokens.find((item) => item.kind === "hero" && item.ownerId === userId);
+  const token = tokens.find((item) => item.kind === "hero" && (item.ownerId === userId || item.controllerIds?.includes(userId)));
   return token?.name.trim() || undefined;
 }
 

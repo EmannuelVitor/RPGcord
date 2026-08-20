@@ -1,0 +1,20 @@
+{
+  "name": "RPGcord — Sua mesa de RPG",
+  "short_name": "RPGcord",
+  "description": "Campanhas, fichas, mapas com névoa de guerra, dados e trilha sonora sincronizados em tempo real para o seu grupo de RPG.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#17141e",
+  "theme_color": "#45376d",
+  "categories": ["games", "entertainment", "social"],
+  "icons": [
+    { "src": "/brand/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

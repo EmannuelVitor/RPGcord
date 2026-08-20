@@ -1,6 +1,7 @@
 "use client";
 
-import { Shield, Sparkles } from "lucide-react";
+import { Shield } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
 
 type Props = {
   context: "discord" | "web";
@@ -14,7 +15,7 @@ export function LoginScreen({ context, loading, error, onGoogleLogin, onTutorial
   return (
     <main className="entry-shell">
       <section className="entry-card login-card">
-        <span className="entry-mark"><Sparkles /></span>
+        <span className="entry-mark"><BrandMark size={64} title="RPGcord" /></span>
         <p className="eyebrow">RPGcord</p>
         <h1>Sua mesa de RPG,<br />sempre no mesmo lugar.</h1>
         <p className="entry-copy">Crie campanhas, convide seus amigos, monte sua ficha e jogue com tudo sincronizado em tempo real.</p>

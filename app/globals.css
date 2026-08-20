@@ -21,8 +21,8 @@ button { cursor: pointer; }
 .app-shell { min-height: 100vh; display: flex; }
 .sidebar { position: fixed; inset: 0 auto 0 0; width: 246px; z-index: 30; display: flex; flex-direction: column; background: #45376d; color: #f7f4ff; border-right: 1px solid rgba(255,255,255,.1); }
 .brand { height: 84px; display: flex; align-items: center; gap: 12px; padding: 0 22px; border-bottom: 1px solid rgba(255,255,255,.08); }
-.brand-mark { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid #d5c9f4; transform: rotate(45deg); border-radius: 8px; background: rgba(255,255,255,.07); }
-.brand-mark svg { width: 19px; transform: rotate(-45deg); color: #eadcff; }
+.brand-mark { width: 38px; height: 38px; display: grid; place-items: center; }
+.brand-mark svg { width: 38px; height: 38px; filter: drop-shadow(0 3px 8px rgba(20,12,44,.35)); }
 .brand strong { display: block; font-family: var(--font-display); font-size: 22px; letter-spacing: .02em; font-weight: 400; }
 .brand small { display: block; color: #c2b7df; font-size: 8px; letter-spacing: .18em; margin-top: 2px; }
 .sidebar nav { padding: 24px 14px; flex: 1; }
@@ -108,8 +108,8 @@ button { cursor: pointer; }
 /* Autenticação e campanhas */
 .entry-shell { min-height:100vh;display:grid;place-items:center;padding:28px;background:radial-gradient(circle at 20% 18%,rgba(221,207,255,.45),transparent 30%),linear-gradient(135deg,#3f3167,#7f68ce 56%,#b39eea); }
 .entry-card { width:min(480px,100%);padding:48px;border:1px solid rgba(255,255,255,.18);border-radius:18px;background:rgba(255,254,250,.98);box-shadow:0 28px 80px rgba(4,19,13,.35);text-align:center; }
-.entry-mark { width:58px;height:58px;margin:0 auto 20px;display:grid;place-items:center;border-radius:16px;transform:rotate(45deg);background:var(--forest);color:#f1eaff;box-shadow:0 9px 25px rgba(91,67,163,.3); }
-.entry-mark svg { transform:rotate(-45deg); }
+.entry-mark { width:64px;height:64px;margin:0 auto 20px;display:grid;place-items:center; }
+.entry-mark svg { width:64px;height:64px;filter:drop-shadow(0 9px 22px rgba(91,67,163,.38)); }
 .entry-card h1 { margin:8px 0 14px;font:400 35px/1.12 var(--font-display); }
 .entry-copy { margin:0 auto 25px;max-width:360px;color:var(--muted);font-size:13px;line-height:1.65; }
 .google-button { width:100%;height:48px;border:1px solid #ced5cf;border-radius:8px;background:white;color:#304239;display:flex;align-items:center;justify-content:center;gap:11px;font-size:13px;font-weight:750;box-shadow:0 2px 8px rgba(23,54,43,.06); }
@@ -214,6 +214,42 @@ button:disabled { opacity:.6;cursor:not-allowed; }
 .fog-of-war.gm-fog .fog-texture { opacity:.16; }
 .light-glows { position:absolute;inset:0;z-index:4;width:100%;height:100%;pointer-events:none;mix-blend-mode:screen; }
 .map-light-marker { position:absolute;z-index:11;width:30px;height:30px;display:grid;place-items:center;transform:translate(-50%,-50%);border:2px solid #fff;border-radius:50%;background:var(--light-color);color:#493915;box-shadow:0 0 0 3px rgba(255,220,130,.32),0 0 22px var(--light-color);touch-action:none;user-select:none; }
+/* Seletor de exibicao de nomes nos pinos, junto dos controles de zoom. */
+.map-name-mode { display:flex;align-items:center;gap:4px;padding:0 4px 0 6px;color:#526158;border-radius:5px; }
+.map-name-mode:hover { background:#eee9fa;color:var(--forest-2); }
+.map-name-mode select { max-width:126px;border:0;background:transparent;color:inherit;font-size:9px;font-weight:700;padding:6px 2px;cursor:pointer; }
+.map-name-mode select:focus-visible { outline:2px solid var(--forest);outline-offset:1px;border-radius:4px; }
+
+/* Cartao de identificacao aberto ao clicar num pino. */
+.character-player-tag { margin-left:5px;color:var(--muted);font-size:9px;font-style:normal;font-weight:600; }
+.token-info-popover { position:absolute;z-index:24;width:250px;padding:11px;border:1px solid rgba(76,57,116,.28);border-radius:12px;background:rgba(255,254,252,.98);box-shadow:0 16px 42px rgba(28,18,48,.3);backdrop-filter:blur(10px); }
+.token-info-popover > header { display:flex;align-items:flex-start;gap:9px; }
+.token-info-popover > header > div { flex:1;min-width:0; }
+.token-info-popover strong { display:block;color:var(--ink);font-size:12px;line-height:1.25;overflow-wrap:anywhere; }
+.token-info-popover small { display:block;margin-top:2px;color:var(--muted);font-size:9px;overflow-wrap:anywhere; }
+.token-info-popover > header > button { flex:none;width:24px;height:24px;display:grid;place-items:center;border:0;border-radius:5px;background:#eee8f7;color:#6a5a82; }
+.token-info-avatar { flex:none;width:38px;height:38px;position:relative;display:grid;place-items:center;overflow:hidden;border-radius:50%;border:2px solid #fff;background:var(--token-color,var(--forest));color:#fff;font-size:11px;font-weight:800;box-shadow:0 2px 8px rgba(28,41,33,.28); }
+.token-info-avatar img { position:absolute;inset:0;width:100%;height:100%;object-fit:cover; }
+.token-info-popover > footer { display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:11px;padding-top:9px;border-top:1px solid #e8e1f0; }
+.token-info-popover > footer button { display:flex;align-items:center;gap:4px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--forest-2);font-size:8px;font-weight:700; }
+.token-info-popover > footer button:hover { background:var(--sage); }
+.token-info-kind { display:flex;align-items:center;gap:4px;padding:4px 7px;border-radius:99px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.04em; }
+.token-info-kind.hero { background:#ece5fb;color:#5b47a0; }
+.token-info-kind.monster { background:#f7e2e2;color:#963939; }
+.token-info-locked { display:flex;align-items:center;gap:4px;color:var(--muted);font-size:8px;font-weight:700; }
+
+html[data-theme="dark"] .token-info-popover { border-color:#443a56;background:rgba(33,29,41,.98); }
+html[data-theme="dark"] .token-info-popover > header > button { background:#332c40;color:#cfc6de; }
+html[data-theme="dark"] .token-info-popover > footer { border-top-color:#3a3348; }
+html[data-theme="dark"] .token-info-popover > footer button { border-color:#453d51;background:#2a2434;color:#c3b2f0; }
+html[data-theme="dark"] .token-info-kind.hero { background:#352b4b;color:#c7b6f2; }
+html[data-theme="dark"] .token-info-kind.monster { background:#43272a;color:#e5a9a9; }
+html[data-theme="dark"] .map-name-mode { color:#d8d1e4; }
+.map-light-marker.preview { pointer-events:none;border-style:dashed;animation:light-preview-pulse 1.5s ease-in-out infinite; }
+.map-light-marker.preview > span { background:rgba(93,68,24,.9); }
+@keyframes light-preview-pulse { 0%,100% { transform:translate(-50%,-50%) scale(1);opacity:.9; } 50% { transform:translate(-50%,-50%) scale(1.12);opacity:1; } }
+.light-preview-tag { margin-left:auto;padding:2px 6px;border-radius:99px;background:#f3e6cd;color:#8a6321;font-size:7px;font-style:normal;font-weight:700;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap; }
+html[data-theme="dark"] .light-preview-tag { background:#4a3a1c;color:#f0d9a6; }
 .map-light-marker.disabled { opacity:.5;filter:grayscale(1);box-shadow:0 2px 8px rgba(0,0,0,.25); }.map-light-marker > span { position:absolute;top:calc(100% + 5px);left:50%;transform:translateX(-50%);padding:2px 5px;border-radius:3px;background:rgba(22,17,32,.82);color:#fff;font-size:7px;white-space:nowrap; }
 .map-tools button.reveal-active { background:#f3e3a6;color:#7259c7;box-shadow:inset 0 0 0 1px #dac16b; }
 .drawer select { width:100%;height:38px;padding:0 10px;border:1px solid #d8d3e7;border-radius:7px;background:#fff;color:var(--ink);font-size:11px;outline:none; }
@@ -394,6 +430,8 @@ button:disabled { opacity:.6;cursor:not-allowed; }
   .dynamic-field-wrap.type-richtext,.dynamic-field-wrap.type-status { grid-column:auto; }
   .template-field-main,.template-number-settings { grid-template-columns:1fr 1fr; }
   .light-config-popover { left:7px!important;right:7px;width:auto; }
+  .token-info-popover { left:7px!important;right:7px;width:auto; }
+  .map-name-mode select { max-width:96px; }
 }
 /* Navegação retrátil, guias e recursos de sessão */
 .sidebar,.workspace { transition:transform .24s ease,margin .24s ease,width .24s ease; }

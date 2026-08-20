@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Battlemap } from "@/components/Battlemap";
+import { BrandMark } from "@/components/BrandMark";
 import { CampaignJournal } from "@/components/CampaignJournal";
 import { CharacterSheet } from "@/components/CharacterSheet";
 import { DiceHistoryPanel } from "@/components/DiceHistoryPanel";
@@ -40,6 +41,7 @@ import { PlayerNotes } from "@/components/PlayerNotes";
 import { SessionChat } from "@/components/SessionChat";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { useGameSession } from "@/hooks/useGameSession";
+import { characterNameOf, composeName } from "@/lib/display-name";
 import type { AppUser, Campaign, CampaignMember } from "@/lib/types";
 
 type PanelKey = "sheet" | "history" | "chat" | "journal" | "notes" | "settings" | "gm";
@@ -240,7 +242,9 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
 
   function getTabLabel(tab: WorkspaceTabKey) {
     if (!isWhisperTab(tab)) return panelLabels[tab];
-    return getWhisperPartner(whisperPartnerId(tab))?.name ?? "Privado";
+    const partner = getWhisperPartner(whisperPartnerId(tab));
+    if (!partner) return "Privado";
+    return composeName(characterNameOf(partner.userId, game.tokens), partner.name) || partner.name;
   }
 
   function renderPanel(panel: WorkspaceTabKey) {
@@ -249,11 +253,11 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
       const partner = getWhisperPartner(partnerId);
       if (!partner) return null;
       const privateMessages = game.whisperMessages.filter((message) => message.participantIds?.includes(partnerId) || message.userId === partnerId || message.recipientId === partnerId);
-      return <SessionChat embedded campaignId={campaign.id} campaignName={campaign.name} user={user} messages={privateMessages} participants={game.participants} privateWith={partner} isGM={game.isGM} onSend={game.sendChatMessage} onClear={game.clearChat} onClose={() => closePanel(panel)} />;
+      return <SessionChat embedded campaignId={campaign.id} campaignName={campaign.name} user={user} messages={privateMessages} participants={game.participants} tokens={game.tokens} privateWith={partner} isGM={game.isGM} onSend={game.sendChatMessage} onClear={game.clearChat} onClose={() => closePanel(panel)} />;
     }
     if (panel === "sheet") return <CharacterSheet embedded campaignId={campaign.id} character={game.character} template={game.sheetTemplate} onSave={game.saveCharacter} onClose={() => closePanel("sheet")} />;
-    if (panel === "history") return <DiceHistoryPanel embedded rolls={game.rolls} onClose={() => closePanel("history")} />;
-    if (panel === "chat") return <SessionChat embedded campaignId={campaign.id} campaignName={campaign.name} user={user} messages={game.chatMessages} whispers={game.whisperMessages} participants={game.participants} isGM={game.isGM} onSend={game.sendChatMessage} onOpenWhisper={openWhisper} onClear={game.clearChat} onClose={() => closePanel("chat")} />;
+    if (panel === "history") return <DiceHistoryPanel embedded rolls={game.rolls} tokens={game.tokens} onClose={() => closePanel("history")} />;
+    if (panel === "chat") return <SessionChat embedded campaignId={campaign.id} campaignName={campaign.name} user={user} messages={game.chatMessages} whispers={game.whisperMessages} participants={game.participants} tokens={game.tokens} isGM={game.isGM} onSend={game.sendChatMessage} onOpenWhisper={openWhisper} onClear={game.clearChat} onClose={() => closePanel("chat")} />;
     if (panel === "journal") return <CampaignJournal embedded journal={game.journal} isGM={game.isGM} onSave={game.saveJournal} onClose={() => closePanel("journal")} />;
     if (panel === "notes") return <PlayerNotes embedded notes={game.notes} participants={game.participants} userId={user.id} onSave={game.saveNotes} onClose={() => closePanel("notes")} />;
     if (panel === "settings") return <SettingsPanel embedded theme={theme} onTheme={setTheme} onClose={() => closePanel("settings")} />;
@@ -266,7 +270,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
       <button className="mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Abrir menu"><Menu /></button>
       <button className="sidebar-toggle" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Exibir menu lateral" : "Ocultar menu lateral"}>{sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button>
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-        <div className="brand"><span className="brand-mark"><Sparkles /></span><div><strong>RPGcord</strong><small>RPG COMPANION</small></div></div>
+        <div className="brand"><span className="brand-mark"><BrandMark size={38} /></span><div><strong>RPGcord</strong><small>MESA DE RPG AO VIVO</small></div></div>
         <button className="sidebar-close" onClick={() => setSidebarOpen(false)}><X size={18} /></button>
         <nav>
           <p>Jornada</p>
@@ -300,7 +304,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
             {game.isGM ? <button className="outline-button invite-top" onClick={() => setInviteOpen(true)}><UserPlus size={16} /> Convidar</button> : null}
             <button className="outline-button" onClick={() => openPanel("sheet")}><ScrollText size={16} /> {game.hasCharacter ? "Abrir ficha" : "Criar ficha"}</button>
           </div>
-          {participantsOpen ? <ParticipantsPopover members={game.participants} currentUserId={user.id} onClose={() => setParticipantsOpen(false)} /> : null}
+          {participantsOpen ? <ParticipantsPopover members={game.participants} tokens={game.tokens} currentUserId={user.id} onClose={() => setParticipantsOpen(false)} /> : null}
         </header>
 
         {(campaign.description || game.syncError || !game.hasCharacter) ? (
@@ -310,15 +314,15 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
         ) : null}
 
         <div className="content-grid">
-          <Battlemap scene={game.scene} tokens={game.tokens} userId={user.id} isGM={game.isGM} hasCharacter={game.hasCharacter} onMove={game.moveToken} onToggleTokenLock={game.toggleTokenLock} onRequestCharacter={() => openPanel("sheet")} onRevealArea={game.revealArea} onClearRevealed={game.clearRevealed} onMoveLight={game.moveLight} onCreateLight={game.createLight} onUpdateLight={game.updateLight} onDeleteLight={game.deleteLight} onSetGlobalVision={game.setGlobalVision} onSetTokenVision={game.setTokenVision} />
-          <DiceRoller rolls={game.rolls} onRoll={game.rollDie} />
+          <Battlemap scene={game.scene} tokens={game.tokens} participants={game.participants} userId={user.id} isGM={game.isGM} hasCharacter={game.hasCharacter} onMove={game.moveToken} onToggleTokenLock={game.toggleTokenLock} onRequestCharacter={() => openPanel("sheet")} onRevealArea={game.revealArea} onClearRevealed={game.clearRevealed} onMoveLight={game.moveLight} onCreateLight={game.createLight} onUpdateLight={game.updateLight} onDeleteLight={game.deleteLight} onSetGlobalVision={game.setGlobalVision} onSetTokenVision={game.setTokenVision} />
+          <DiceRoller rolls={game.rolls} tokens={game.tokens} onRoll={game.rollDie} />
         </div>
 
         <section className="bottom-strip">
           <div className="quest-card"><span><BookOpen size={18} /></span><div><p className="eyebrow">Campanha atual</p><strong>{campaign.description || "A história será escrita pelo seu grupo."}</strong></div><small>{game.isGM ? "MESTRE" : "JOGADOR"}</small></div>
           <div className="character-summary">
             <div className="portrait">{game.character.imageUrl ? <img src={game.character.imageUrl} alt="" /> : characterName.split(" ").map((part) => part[0]).join("").slice(0, 2)}</div>
-            <div><p className="eyebrow">Seu personagem</p><strong>{characterName}</strong><span>{game.hasCharacter ? `${game.character.ancestry || "Sem ancestralidade"} · ${game.character.characterClass || "Sem classe"} ${game.character.level}` : "Crie a ficha para gerar seu pino no mapa"}</span></div>
+            <div><p className="eyebrow">Seu personagem</p><strong>{characterName}{game.hasCharacter ? <em className="character-player-tag">({user.name})</em> : null}</strong><span>{game.hasCharacter ? `${game.character.ancestry || "Sem ancestralidade"} · ${game.character.characterClass || "Sem classe"} ${game.character.level}` : "Crie a ficha para gerar seu pino no mapa"}</span></div>
             {game.hasCharacter ? <div className="hp"><span><i style={{ width: `${hpPercent}%` }} /></span><strong>{game.character.hp}/{game.character.maxHp} PV</strong></div> : null}
             <button className="text-button" onClick={() => openPanel("sheet")}>{game.hasCharacter ? "Ver ficha" : "Criar ficha"} →</button>
           </div>

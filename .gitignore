@@ -13,3 +13,9 @@ firebase-debug.log
 
 .vercel
 .env*
+
+# Ferramentas de IA / ambiente local do agente
+.claude/
+CLAUDE.md
+.cursor/
+.aider*

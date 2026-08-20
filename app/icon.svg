@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="RPGcord">
+  <defs><linearGradient id="rpgcFav" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#45376d"/><stop offset="1" stop-color="#7259c7"/></linearGradient></defs>
+  <rect width="64" height="64" rx="14" fill="url(#rpgcFav)"/>
+  <path fill="#ffffff" fill-rule="evenodd" d="M32.00 13.50 L48.45 23.00 L48.45 42.00 L32.00 51.50 L15.55 42.00 L15.55 23.00 Z M32.00 23.00 L40.23 37.25 L23.77 37.25 Z"/>
+  <g fill="none" stroke="#45376d" stroke-width="2.6" stroke-linecap="round" stroke-opacity=".9">
+    <path d="M32.00 23.00 L32.00 13.50"/>
+    <path d="M23.77 37.25 L15.55 42.00"/>
+    <path d="M40.23 37.25 L48.45 42.00"/>
+  </g>
+</svg>

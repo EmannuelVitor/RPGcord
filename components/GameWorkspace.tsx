@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { Battlemap } from "@/components/Battlemap";
 import { BrandMark } from "@/components/BrandMark";
 import { CampaignJournal } from "@/components/CampaignJournal";
@@ -225,6 +226,13 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
   }, [activeTab, game.whisperMessages, user.id]);
 
   const panelOpen = Boolean(activeTab && openTabs.includes(activeTab));
+  useEscapeKey(useCallback(() => {
+    if (revealOpen) { setRevealOpen(false); return; }
+    if (inviteOpen) { setInviteOpen(false); return; }
+    if (participantsOpen) { setParticipantsOpen(false); return; }
+    if (sidebarOpen) { setSidebarOpen(false); return; }
+    if (activeTab) closePanel(activeTab);
+  }, [activeTab, closePanel, inviteOpen, participantsOpen, revealOpen, sidebarOpen]));
   const onlineCount = game.participants.filter((member) => member.lastSeenAt && Date.now() - member.lastSeenAt < 100000).length;
   const totalUnread = unreadChat + Object.values(unreadWhispers).reduce((total, count) => total + count, 0);
 
@@ -331,14 +339,14 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
               const Icon = privateTab ? LockKeyhole : panelIcons[tab];
               const label = getTabLabel(tab);
               const unread = partnerId ? unreadWhispers[partnerId] ?? 0 : 0;
-              return <button className={tab === activeTab ? "active" : ""} key={tab} onClick={() => {
-                setActiveTab(tab);
-                if (tab === "chat") setUnreadChat(0);
-                if (partnerId) setUnreadWhispers((current) => ({ ...current, [partnerId]: 0 }));
-              }}><Icon size={14} /><span>{label}</span>{unread > 0 ? <b className="tab-unread">{unread}</b> : null}<i role="button" tabIndex={0} aria-label={`Fechar ${label}`} onClick={(event) => {
-                event.stopPropagation();
-                closePanel(tab);
-              }} onKeyDown={(event) => { if (event.key === "Enter") closePanel(tab); }}><X size={12} /></i></button>;
+              return <div className={"workspace-tab" + (tab === activeTab ? " active" : "")} key={tab}>
+                <button className="workspace-tab-select" aria-current={tab === activeTab} onClick={() => {
+                  setActiveTab(tab);
+                  if (tab === "chat") setUnreadChat(0);
+                  if (partnerId) setUnreadWhispers((current) => ({ ...current, [partnerId]: 0 }));
+                }}><Icon size={14} /><span>{label}</span>{unread > 0 ? <b className="tab-unread">{unread}</b> : null}</button>
+                <button className="workspace-tab-close" aria-label={`Fechar ${label}`} onClick={() => closePanel(tab)}><X size={12} /></button>
+              </div>;
             })}</div>
             <button className={panelPinned ? "active" : ""} onClick={() => setPanelPinned((value) => !value)} title={panelPinned ? "Desafixar painel" : "Fixar painel"}>{panelPinned ? <PinOff size={16} /> : <Pin size={16} />}</button>
           </header>
@@ -348,7 +356,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
 
       {inviteOpen && game.isGM ? <InviteDialog campaign={campaign} onClose={() => setInviteOpen(false)} /> : null}
       <MusicPlayer music={game.music} isGM={game.isGM} onPlayback={game.updateMusicPlayback} onOpen={() => openPanel("music")} />
-      {revealOpen && game.scene.revealUrl ? <div className="reveal-backdrop" onClick={() => setRevealOpen(false)}><button><X /></button><img src={game.scene.revealUrl} alt="Imagem revelada pelo mestre" /></div> : null}
+      {revealOpen && game.scene.revealUrl ? <div className="reveal-backdrop" role="dialog" aria-modal="true" aria-label="Imagem revelada pelo mestre" onClick={() => setRevealOpen(false)}><button><X /></button><img src={game.scene.revealUrl} alt="Imagem revelada pelo mestre" /></div> : null}
     </main>
   );
 }

@@ -44,6 +44,7 @@ const initialScene: Scene = {
   mapUrl: "",
   revealUrl: "",
   gridSize: 48,
+  gridEnabled: false,
   mapFit: "contain",
   fogEnabled: false,
   visionRadius: 14,

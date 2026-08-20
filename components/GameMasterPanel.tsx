@@ -39,6 +39,8 @@ export function GameMasterPanel({ scene, tokens, sheetTemplate, ownerId, embedde
       mapUrl: toDirectDriveUrl(draft.mapUrl),
       revealUrl: toDirectDriveUrl(draft.revealUrl),
       mapFit: draft.mapFit ?? "contain",
+      gridEnabled: Boolean(draft.gridEnabled),
+      gridSize: Math.max(12, Math.min(160, Math.round(draft.gridSize || 48))),
       visionRadius: Math.max(3, Math.min(45, draft.visionRadius ?? 14)),
       visionMode: draft.visionMode ?? "shared",
       ambientLight: Math.max(0, Math.min(1, draft.ambientLight ?? 0)),
@@ -87,8 +89,9 @@ export function GameMasterPanel({ scene, tokens, sheetTemplate, ownerId, embedde
           <h3><Map size={17} /> Mapa ativo</h3>
           <label>Nome da cena<input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
           <label>Link ou ID da imagem no Google Drive<input placeholder="https://drive.google.com/file/d/..." value={draft.mapUrl} onChange={(event) => setDraft({ ...draft, mapUrl: event.target.value })} /></label>
+          <label className="toggle-field"><input type="checkbox" checked={draft.gridEnabled ?? false} onChange={(event) => setDraft({ ...draft, gridEnabled: event.target.checked })} /><span><strong>Mostrar grade sobre o mapa</strong><small>Quadriculado de apoio para medir distâncias. Acompanha o zoom.</small></span></label>
           <div className="inline-fields">
-            <label>Tamanho da grade<input type="number" min="24" max="96" value={draft.gridSize} onChange={(event) => setDraft({ ...draft, gridSize: Number(event.target.value) })} /></label>
+            <label>Tamanho da grade (px)<input type="number" min="12" max="160" value={draft.gridSize} onChange={(event) => setDraft({ ...draft, gridSize: Number(event.target.value) })} /></label>
             <label>Ajuste da imagem<select value={draft.mapFit ?? "contain"} onChange={(event) => setDraft({ ...draft, mapFit: event.target.value as Scene["mapFit"] })}><option value="contain">Mostrar mapa inteiro</option><option value="cover">Preencher a área</option><option value="stretch">Esticar até as bordas</option></select></label>
           </div>
           <p className="field-help">Aceita mapas de qualquer resolução. “Mostrar mapa inteiro” evita cortes na imagem.</p>

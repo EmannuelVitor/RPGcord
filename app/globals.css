@@ -474,10 +474,12 @@ html[data-theme="dark"] .light-preview-tag { background:#4a3a1c;color:#f0d9a6; }
 .workspace-panel-layer.pinned .workspace-tabs-panel { width:460px;border-left:1px solid var(--line);box-shadow:-8px 0 28px rgba(23,16,39,.12); }
 .workspace-tabs-header { flex:none;min-height:47px;display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--line);background:var(--panel); }
 .workspace-tabs { min-width:0;display:flex;gap:4px;flex:1;overflow-x:auto;scrollbar-width:thin; }
-.workspace-tabs > button { height:33px;display:flex;align-items:center;gap:5px;flex:none;padding:0 7px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--muted);font-size:9px; }
-.workspace-tabs > button.active { border-color:#cfc4eb;background:#eee9fa;color:#604a96; }
-.workspace-tabs > button i { width:18px;height:18px;display:grid;place-items:center;border-radius:50%;font-style:normal; }
-.workspace-tabs > button i:hover { background:rgba(99,73,156,.12); }
+.workspace-tab { height:33px;display:flex;align-items:center;gap:3px;flex:none;padding:0 4px 0 7px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--muted);font-size:9px; }
+.workspace-tab.active { border-color:#cfc4eb;background:#eee9fa;color:#604a96; }
+.workspace-tab-select { min-width:0;display:flex;align-items:center;gap:5px;padding:0;border:0;background:transparent;color:inherit;font-size:inherit; }
+.workspace-tab-select > span { max-width:132px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.workspace-tab-close { width:18px;height:18px;display:grid;place-items:center;flex:none;padding:0;border:0;border-radius:50%;background:transparent;color:inherit; }
+.workspace-tab-close:hover { background:rgba(99,73,156,.12); }
 .workspace-tabs-header > button { width:33px;height:33px;display:grid;place-items:center;flex:none;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--muted); }
 .workspace-tabs-header > button.active { background:#e9e3f8;color:#624a9b; }
 .workspace-tab-content { flex:1;min-height:0;overflow:hidden; }

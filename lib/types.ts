@@ -130,6 +130,7 @@ export type Scene = {
   mapUrl: string;
   revealUrl: string;
   gridSize: number;
+  gridEnabled?: boolean;
   mapFit?: MapFit;
   fogEnabled?: boolean;
   visionRadius?: number;

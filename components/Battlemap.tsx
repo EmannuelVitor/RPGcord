@@ -1,8 +1,8 @@
 "use client";
 
 import { Eraser, Eye, Lightbulb, Lock, Minus, Plus, RotateCcw, ScrollText, Shield, SlidersHorizontal, Sun, Swords, Tag, Trash2, Unlock, Users, X } from "lucide-react";
-import { FormEvent, MouseEvent as ReactMouseEvent, PointerEvent, WheelEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { flushSync } from "react-dom";
+import { FormEvent, MouseEvent as ReactMouseEvent, PointerEvent, WheelEvent, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { NAME_DISPLAY_MODES, NAME_DISPLAY_STORAGE_KEY, composeName, isNameDisplayMode, type NameDisplayMode } from "@/lib/display-name";
 import type { CampaignMember, LightSource, MapToken, Scene } from "@/lib/types";
 
@@ -37,6 +37,7 @@ export function Battlemap(props: Props) {
   const [globalVision, setGlobalVision] = useState(scene.visionRadius ?? 14), [individualVision, setIndividualVision] = useState(scene.visionRadius ?? 14);
   const [viewport, setViewport] = useState({ width: 900, height: 520 }), [image, setImage] = useState({ width: 16, height: 9 });
   const [baseSize, setBaseSize] = useState<{ width: number; height: number }>();
+  const zoomAnchor = useRef<{ x: number; y: number; mapX: number; mapY: number } | undefined>(undefined);
 
   useEffect(() => {
     const node = viewportRef.current; if (!node) return;
@@ -69,7 +70,7 @@ export function Battlemap(props: Props) {
 
   function point(event: { clientX: number; clientY: number }) {
     const rect = mapRef.current?.getBoundingClientRect(); if (!rect) return { x: 50, y: 50 };
-    return { x: Math.max(3, Math.min(97, (event.clientX - rect.left) / rect.width * 100)), y: Math.max(5, Math.min(95, (event.clientY - rect.top) / rect.height * 100)) };
+    return { x: Math.max(0, Math.min(100, (event.clientX - rect.left) / rect.width * 100)), y: Math.max(0, Math.min(100, (event.clientY - rect.top) / rect.height * 100)) };
   }
   function constrainTokenPoint(value: { x: number; y: number }) {
     const bounds = scene.movementBounds;
@@ -84,16 +85,27 @@ export function Battlemap(props: Props) {
     const end = Math.max(.5, Math.min(3, target)); zoomTarget.current = end;
     if (zoomFrame.current) cancelAnimationFrame(zoomFrame.current);
     const start = zoomRef.current, time = performance.now(), before = map.getBoundingClientRect();
+    void scroller;
     const focusX = x ?? before.left + before.width / 2, focusY = y ?? before.top + before.height / 2;
     const mapX = Math.max(0, Math.min(1, (focusX - before.left) / before.width)), mapY = Math.max(0, Math.min(1, (focusY - before.top) / before.height));
+    zoomAnchor.current = { x: focusX, y: focusY, mapX, mapY };
     const tick = (now: number) => {
       const progress = Math.min(1, (now - time) / 190), ease = 1 - Math.pow(1 - progress, 3), value = start + (end - start) * ease;
-      flushSync(() => { zoomRef.current = value; setZoom(value); });
-      const rect = map.getBoundingClientRect(); scroller.scrollLeft += rect.left + rect.width * mapX - focusX; scroller.scrollTop += rect.top + rect.height * mapY - focusY;
+      zoomRef.current = value; setZoom(value);
       if (progress < 1) zoomFrame.current = requestAnimationFrame(tick);
+      else zoomAnchor.current = undefined;
     };
     zoomFrame.current = requestAnimationFrame(tick);
   }
+  // Mantem sob o cursor o mesmo ponto do mapa enquanto o zoom anima.
+  useLayoutEffect(() => {
+    const anchor = zoomAnchor.current, scroller = scrollRef.current, map = mapRef.current;
+    if (!anchor || !scroller || !map) return;
+    const rect = map.getBoundingClientRect();
+    scroller.scrollLeft += rect.left + rect.width * anchor.mapX - anchor.x;
+    scroller.scrollTop += rect.top + rect.height * anchor.mapY - anchor.y;
+  }, [zoom]);
+
   function wheel(event: WheelEvent<HTMLDivElement>) { event.preventDefault(); changeZoom(zoomTarget.current * Math.exp(-event.deltaY * .0015), event.clientX, event.clientY); }
   function panStart(event: PointerEvent<HTMLDivElement>) {
     if (revealMode || lightMode || (event.target as HTMLElement).closest("button,input,textarea,select")) return;
@@ -147,12 +159,24 @@ export function Battlemap(props: Props) {
   }
 
   const storedLights = scene.dynamicLights ?? [], vision = scene.visionRadius ?? 14;
+  // Esc desfaz a camada aberta mais recente antes de sair dos modos de edicao.
+  useEscapeKey(useCallback(() => {
+    if (editor) { setEditor(undefined); return; }
+    if (tokenCard) { setTokenCard(undefined); return; }
+    if (visionOpen) { setVisionOpen(false); return; }
+    if (lightMode || revealMode) { setLightMode(false); setRevealMode(false); }
+  }, [editor, lightMode, revealMode, tokenCard, visionOpen]), isGM || Boolean(tokenCard));
+
   const lights = useMemo(() => {
     if (!editor) return storedLights;
     const preview = { ...editor.light, dimRadius: dim(editor.light), brightRadius: bright(editor.light) };
     return editor.mode === "create" ? [...storedLights, preview] : storedLights.map((light) => light.id === preview.id ? preview : light);
   }, [editor, storedLights]);
   const visibleHeroTokens = tokens.filter((token) => token.kind === "hero" && (isGM || scene.visionMode !== "individual" || token.ownerId === userId));
+  const glowDefs = useMemo(() => lights.filter((light) => light.enabled).map((light) =>
+    <radialGradient id={"glow-" + light.id} key={light.id}><stop offset="0%" stopColor={light.color} stopOpacity={light.intensity * .75} /><stop offset={bright(light) / dim(light) * 100 + "%"} stopColor={light.color} stopOpacity={light.intensity * .45} /><stop offset="100%" stopColor={light.color} stopOpacity="0" /></radialGradient>), [lights]);
+  const fogDefs = useMemo(() => <><radialGradient id={visionId}><stop offset="0%" stopColor="#000" /><stop offset="58%" stopColor="#000" /><stop offset="82%" stopColor="#777" /><stop offset="100%" stopColor="#fff" /></radialGradient>{lights.filter((light) => light.enabled).map((light) => { const shade = Math.round(255 * (1 - light.intensity)); return <radialGradient id={"mask-" + light.id} key={light.id}><stop offset="0%" stopColor={"rgb(" + shade + "," + shade + "," + shade + ")"} /><stop offset={bright(light) / dim(light) * 100 + "%"} stopColor={"rgb(" + shade + "," + shade + "," + shade + ")"} /><stop offset="100%" stopColor="#fff" /></radialGradient>; })}</>, [lights, visionId]);
+
   const mapSize = useMemo(() => ({
     width: (baseSize?.width ?? viewport.width) * zoom,
     height: (baseSize?.height ?? viewport.height) * zoom,
@@ -167,11 +191,11 @@ export function Battlemap(props: Props) {
     <header className="panel-header map-header"><div><p className="eyebrow">Cena ativa</p><h2>{scene.name}</h2></div><div className="map-meta"><span><Users size={15} /> {tokens.filter((token) => token.kind === "hero").length} aventureiros</span><span className="live-dot"><i /> sincronizado</span></div></header>
     <div className="map-viewport" ref={viewportRef}>
       <div className={"map-scroll " + (panning ? "is-panning" : "")} ref={scrollRef} onWheel={wheel} onPointerDown={panStart} onPointerMove={panMove} onPointerUp={panEnd} onPointerCancel={panEnd} onContextMenu={(event) => event.preventDefault()}>
-        <div className="map-stage" style={stage}><div ref={mapRef} className={"battle-map " + (revealMode ? "reveal-mode " : "") + (lightMode ? "light-placement-mode" : "")} onPointerUp={mapClick} style={mapSize}>
+        <div className="map-stage" style={stage}><div ref={mapRef} className={"battle-map " + (scene.gridEnabled ? "has-grid " : "") + (revealMode ? "reveal-mode " : "") + (lightMode ? "light-placement-mode" : "")} onPointerUp={mapClick} style={{ ...mapSize, "--grid-size": Math.max(4, (scene.gridSize || 48) * zoom) + "px" } as React.CSSProperties}>
           {scene.mapUrl ? <img className="map-image" src={scene.mapUrl} alt="Mapa da cena" draggable={false} onLoad={(event) => setImage({ width: event.currentTarget.naturalWidth || 16, height: event.currentTarget.naturalHeight || 9 })} /> : <div className="demo-terrain" />}
-          {lights.some((light) => light.enabled) && <svg className="light-glows" viewBox={"0 0 100 " + overlayHeight} preserveAspectRatio="none"><defs>{lights.filter((light) => light.enabled).map((light) => <radialGradient id={"glow-" + light.id} key={light.id}><stop offset="0%" stopColor={light.color} stopOpacity={light.intensity * .75} /><stop offset={bright(light) / dim(light) * 100 + "%"} stopColor={light.color} stopOpacity={light.intensity * .45} /><stop offset="100%" stopColor={light.color} stopOpacity="0" /></radialGradient>)}</defs>{lights.filter((light) => light.enabled).map((light) => { const p = lightDrag?.id === light.id ? lightDrag : light; return <circle key={light.id} cx={p.x} cy={p.y * aspect} r={dim(light)} fill={"url(#glow-" + light.id + ")"} />; })}</svg>}
+          {lights.some((light) => light.enabled) && <svg className="light-glows" viewBox={"0 0 100 " + overlayHeight} preserveAspectRatio="none"><defs>{glowDefs}</defs>{lights.filter((light) => light.enabled).map((light) => { const p = lightDrag?.id === light.id ? lightDrag : light; return <circle key={light.id} cx={p.x} cy={p.y * aspect} r={dim(light)} fill={"url(#glow-" + light.id + ")"} />; })}</svg>}
           {tokens.map((token) => { const p = drag?.id === token.id ? drag : token; const canControl = isGM || token.ownerId === userId; const label = labelOf(token); return <button className={"map-token " + token.kind + (token.locked ? " locked" : "") + (drag?.id === token.id ? " dragging" : "")} key={token.id} style={{ left: p.x + "%", top: p.y + "%", "--token-color": token.color } as React.CSSProperties} onPointerDown={(event) => tokenStart(event, token)} onPointerMove={(event) => { if (!drag) return; const origin = tokenOrigin.current; if (origin && Math.abs(event.clientX - origin.x) + Math.abs(event.clientY - origin.y) > 3) tokenMoved.current = true; setDrag({ id: drag.id, ...constrainTokenPoint(point(event)) }); }} onPointerUp={tokenEnd} onDoubleClick={(event) => { if (canControl) { event.stopPropagation(); onToggleTokenLock(token.id); } }} onClick={(event) => { if (tokenMoved.current) return; event.stopPropagation(); if (token.kind === "hero") setSelectedToken(token.id); setTokenCard({ id: token.id, ...popover(event.clientX, event.clientY) }); }} title={fullNameOf(token) + (canControl ? " · duplo clique para " + (token.locked ? "desbloquear" : "bloquear") : "")}>{token.imageUrl ? <img src={token.imageUrl} alt="" draggable={false} /> : token.initials}{token.locked ? <Lock className="token-lock-icon" size={12} /> : null}{label ? <span>{label}</span> : null}</button>; })}
-          {scene.fogEnabled && <svg className={"fog-of-war " + (isGM ? "gm-fog" : "")} viewBox={"0 0 100 " + overlayHeight} preserveAspectRatio="none"><defs><radialGradient id={visionId}><stop offset="0%" stopColor="#000" /><stop offset="58%" stopColor="#000" /><stop offset="82%" stopColor="#777" /><stop offset="100%" stopColor="#fff" /></radialGradient>{lights.filter((light) => light.enabled).map((light) => { const shade = Math.round(255 * (1 - light.intensity)); return <radialGradient id={"mask-" + light.id} key={light.id}><stop offset="0%" stopColor={"rgb(" + shade + "," + shade + "," + shade + ")"} /><stop offset={bright(light) / dim(light) * 100 + "%"} stopColor={"rgb(" + shade + "," + shade + "," + shade + ")"} /><stop offset="100%" stopColor="#fff" /></radialGradient>; })}<mask id={fogId}><rect width="100" height={overlayHeight} fill="#fff" /><g style={{ isolation: "isolate" }}>{visibleHeroTokens.map((token) => { const p = drag?.id === token.id ? drag : token; return <circle key={token.id} cx={p.x} cy={p.y * aspect} r={token.visionRadius ?? vision} fill={"url(#" + visionId + ")"} style={{ mixBlendMode: "multiply" }} />; })}{(scene.revealedAreas ?? []).map((area) => <circle key={area.id} cx={area.x} cy={area.y * aspect} r={area.radius} fill={"url(#" + visionId + ")"} style={{ mixBlendMode: "multiply" }} />)}{lights.filter((light) => light.enabled).map((light) => { const p = lightDrag?.id === light.id ? lightDrag : light; return <circle key={light.id} cx={p.x} cy={p.y * aspect} r={dim(light)} fill={"url(#mask-" + light.id + ")"} style={{ mixBlendMode: "multiply" }} />; })}</g></mask></defs><rect className="fog-overlay" width="100" height={overlayHeight} mask={"url(#" + fogId + ")"} style={{ opacity: Math.max(.15, 1 - (scene.ambientLight ?? 0) * .8) }} /></svg>}
+          {scene.fogEnabled && <svg className={"fog-of-war " + (isGM ? "gm-fog" : "")} viewBox={"0 0 100 " + overlayHeight} preserveAspectRatio="none"><defs>{fogDefs}<mask id={fogId}><rect width="100" height={overlayHeight} fill="#fff" /><g style={{ isolation: "isolate" }}>{visibleHeroTokens.map((token) => { const p = drag?.id === token.id ? drag : token; return <circle key={token.id} cx={p.x} cy={p.y * aspect} r={token.visionRadius ?? vision} fill={"url(#" + visionId + ")"} style={{ mixBlendMode: "multiply" }} />; })}{(scene.revealedAreas ?? []).map((area) => <circle key={area.id} cx={area.x} cy={area.y * aspect} r={area.radius} fill={"url(#" + visionId + ")"} style={{ mixBlendMode: "multiply" }} />)}{lights.filter((light) => light.enabled).map((light) => { const p = lightDrag?.id === light.id ? lightDrag : light; return <circle key={light.id} cx={p.x} cy={p.y * aspect} r={dim(light)} fill={"url(#mask-" + light.id + ")"} style={{ mixBlendMode: "multiply" }} />; })}</g></mask></defs><rect className="fog-overlay" width="100" height={overlayHeight} mask={"url(#" + fogId + ")"} style={{ opacity: Math.max(.15, 1 - (scene.ambientLight ?? 0) * .8) }} /></svg>}
           {isGM && storedLights.map((light) => { const p = lightDrag?.id === light.id ? lightDrag : light; return <button className={"map-light-marker " + (light.enabled ? "enabled" : "disabled")} key={light.id} style={{ left: p.x + "%", top: p.y + "%", "--light-color": light.color } as React.CSSProperties} onPointerDown={(event) => lightStart(event, light.id)} onPointerMove={(event) => { if (lightDrag) { lightMoved.current = true; setLightDrag({ id: lightDrag.id, ...point(event) }); } }} onPointerUp={lightEnd} onClick={(event) => editLight(event, light)}><Lightbulb size={14} /><span>{light.name}</span></button>; })}
           {isGM && editor?.mode === "create" ? <span className={"map-light-marker preview " + (editor.light.enabled ? "enabled" : "disabled")} style={{ left: editor.light.x + "%", top: editor.light.y + "%", "--light-color": editor.light.color } as React.CSSProperties}><Lightbulb size={14} /><span>{editor.light.name}</span></span> : null}
           {isGM && scene.movementBounds?.enabled ? <div className="movement-boundary" style={{ left: scene.movementBounds.left + "%", top: scene.movementBounds.top + "%", right: (100 - scene.movementBounds.right) + "%", bottom: (100 - scene.movementBounds.bottom) + "%" }}><span>Limite de movimento</span></div> : null}

@@ -2,10 +2,12 @@
 
 import { Dices, Minus, Plus, Sparkles } from "lucide-react";
 import { useState } from "react";
-import type { DiceRoll, DiceValidationMode } from "@/lib/types";
+import { characterNameOf, composeName } from "@/lib/display-name";
+import type { DiceRoll, DiceValidationMode, MapToken } from "@/lib/types";
 
 type Props = {
   rolls: DiceRoll[];
+  tokens?: MapToken[];
   onRoll: (sides: number, modifier: number, quantity: number, validationMode: DiceValidationMode) => Promise<DiceRoll>;
 };
 
@@ -23,7 +25,8 @@ function relativeTime(timestamp: number) {
   return `há ${minutes} min`;
 }
 
-export function DiceRoller({ rolls, onRoll }: Props) {
+export function DiceRoller({ rolls, tokens = [], onRoll }: Props) {
+  const nameOf = (roll: DiceRoll) => composeName(characterNameOf(roll.userId, tokens), roll.userName) || roll.userName;
   const [selected, setSelected] = useState(20);
   const [modifier, setModifier] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -89,9 +92,9 @@ export function DiceRoller({ rolls, onRoll }: Props) {
       <div className="roll-log" aria-live="polite">
         {rolls.map((roll, index) => (
           <article className={index === 0 ? "latest" : ""} key={roll.id}>
-            <div className="roll-avatar">{roll.userName.slice(0, 1).toUpperCase()}</div>
+            <div className="roll-avatar">{nameOf(roll).slice(0, 1).toUpperCase()}</div>
             <div className="roll-copy">
-              <strong>{roll.userName}</strong>
+              <strong>{nameOf(roll)}</strong>
               <span>rolou {roll.quantity && roll.quantity > 1 ? `${roll.quantity}d${roll.sides}` : `d${roll.sides}`}{roll.modifier ? ` ${roll.modifier > 0 ? "+" : ""}${roll.modifier}` : ""}</span>
               {roll.results && roll.results.length > 1 && <span className="roll-details">{validationLabels[roll.validationMode ?? "sum"]}: [{roll.results.join(", ")}]</span>}
             </div>

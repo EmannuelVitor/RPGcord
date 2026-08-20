@@ -60,7 +60,7 @@ function CampaignController({ user, appearance, onSignOut }: { user: AppUser; ap
   }
   return (
     <>
-      <WorkspaceView user={user} campaign={campaignState.activeCampaign} onCampaigns={() => campaignState.selectCampaign(undefined)} onRemoveMember={campaignState.removeMember} appearance={appearance} onSignOut={onSignOut} onTutorial={() => setTutorialOpen(true)} />
+      <WorkspaceView user={user} campaign={campaignState.activeCampaign} onCampaigns={() => campaignState.selectCampaign(undefined)} onLeaveCampaign={campaignState.leaveCampaign} onDeleteCampaign={campaignState.deleteCampaign} onRemoveMember={campaignState.removeMember} appearance={appearance} onSignOut={onSignOut} onTutorial={() => setTutorialOpen(true)} />
       {tutorialOpen && <TutorialModal onClose={closeTutorial} />}
     </>
   );

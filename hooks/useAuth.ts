@@ -42,6 +42,18 @@ function friendlyAuthError(error: unknown) {
 
 let activityMappingsPatched = false;
 
+async function createProtectedSession() {
+  const firebaseUser = auth?.currentUser;
+  if (!firebaseUser) return;
+  const idToken = await firebaseUser.getIdToken();
+  const response = await fetch("/api/session", { method: "POST", headers: { Authorization: `Bearer ${idToken}` } });
+  if (!response.ok) throw new Error("Não foi possível proteger a sessão de imagens.");
+}
+
+async function clearProtectedSession() {
+  await fetch("/api/session", { method: "DELETE" });
+}
+
 export function useAuth() {
   const [state, setState] = useState<AuthState>({
     context: "web",
@@ -50,6 +62,7 @@ export function useAuth() {
 
   useEffect(() => {
     const context = isDiscordActivity() ? "discord" : "web";
+    let active = true;
     if (!isFirebaseConfigured || !auth) {
       setState({ context, loading: false, error: "O Firebase não está configurado neste ambiente." });
       return;
@@ -57,24 +70,31 @@ export function useAuth() {
 
     if (context === "web") {
       const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-        setState({
-          context,
-          loading: false,
-          mode: firebaseUser ? "google" : undefined,
-          user: firebaseUser
-            ? {
-                id: firebaseUser.uid,
-                name: firebaseUser.displayName ?? firebaseUser.email?.split("@")[0] ?? "Aventureiro",
-                email: firebaseUser.email ?? undefined,
-                avatarUrl: firebaseUser.photoURL ?? undefined,
-              }
-            : undefined,
-        });
+        void (async () => {
+          try {
+            await (firebaseUser ? createProtectedSession() : clearProtectedSession());
+          } catch (error) {
+            console.error("[RPGcord] Sessão protegida", error);
+          }
+          if (!active) return;
+          setState({
+            context,
+            loading: false,
+            mode: firebaseUser ? "google" : undefined,
+            user: firebaseUser
+              ? {
+                  id: firebaseUser.uid,
+                  name: firebaseUser.displayName ?? firebaseUser.email?.split("@")[0] ?? "Aventureiro",
+                  email: firebaseUser.email ?? undefined,
+                  avatarUrl: firebaseUser.photoURL ?? undefined,
+                }
+              : undefined,
+          });
+        })();
       });
-      return unsubscribe;
+      return () => { active = false; unsubscribe(); };
     }
 
-    let active = true;
     async function connectDiscord() {
       try {
         const clientId = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
@@ -114,6 +134,7 @@ export function useAuth() {
         if (!firebaseResponse.ok) throw new Error("Não foi possível autenticar o usuário no Firebase.");
         const { firebaseToken } = (await firebaseResponse.json()) as { firebaseToken: string };
         await signInWithCustomToken(auth!, firebaseToken);
+        await createProtectedSession();
 
         if (!active) return;
         const discordUser = session.user;
@@ -152,6 +173,7 @@ export function useAuth() {
   }, []);
 
   const signOutUser = useCallback(async () => {
+    await clearProtectedSession().catch(() => undefined);
     if (auth) await signOut(auth);
   }, []);
 

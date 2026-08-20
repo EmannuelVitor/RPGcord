@@ -2,6 +2,8 @@
 
 import {
   addDoc,
+  arrayRemove,
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -20,7 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveRoll, rollOne } from "@/lib/dice";
 import { db, isFirebaseConfigured } from "@/lib/firebase";
 import { DEFAULT_SHEET_TEMPLATE, normalizeSheetTemplate } from "@/lib/sheet-template";
-import type { AppUser, CampaignJournal, CampaignMember, CampaignMusic, Character, CharacterNotes, ChatMessage, DiceRoll, DiceValidationMode, FogArea, LightSource, MapToken, Scene, SheetTemplate } from "@/lib/types";
+import type { AppUser, CampaignJournal, CampaignMember, CampaignMusic, Character, CharacterNotes, ChatMessage, DiceRoll, DiceValidationMode, FogArea, InitiativeState, LightSource, MapToken, Scene, SheetTemplate } from "@/lib/types";
 
 function blankCharacter(user: AppUser): Character {
   return {
@@ -78,6 +80,7 @@ function dedupeRevealed(areas: FogArea[]) {
 const initialJournal: CampaignJournal = { content: "" };
 const initialMusic: CampaignMusic = { youtubeUrl: "", title: "", loop: false, playing: false, position: 0 };
 const initialNotes: CharacterNotes = { content: "", shareWithGM: false, sharedWithPlayerIds: [] };
+const initialInitiative: InitiativeState = { entries: [], activeIndex: -1, round: 0, running: false };
 
 function normalizeLight(light: LightSource): LightSource {
   const dimRadius = Math.max(3, Math.min(45, light.dimRadius ?? light.radius ?? 16));
@@ -90,6 +93,7 @@ function normalizeLight(light: LightSource): LightSource {
 
 export function useGameSession(campaignId: string, user: AppUser) {
   const [character, setCharacter] = useState<Character>(() => blankCharacter(user));
+  const [characters, setCharacters] = useState<Character[]>([]);
   const [hasCharacter, setHasCharacter] = useState(false);
   const [rolls, setRolls] = useState<DiceRoll[]>([]);
   const [tokens, setTokens] = useState<MapToken[]>([]);
@@ -101,16 +105,20 @@ export function useGameSession(campaignId: string, user: AppUser) {
   const [sheetTemplate, setSheetTemplate] = useState<SheetTemplate>(DEFAULT_SHEET_TEMPLATE);
   const [notes, setNotes] = useState<CharacterNotes>(initialNotes);
   const [participants, setParticipants] = useState<CampaignMember[]>([]);
+  const [initiative, setInitiative] = useState<InitiativeState>(initialInitiative);
   const [gmId, setGmId] = useState("");
   // Espelha a cena para que as acoes rapidas do mapa nao leiam um valor velho
   // capturado no fechamento do callback.
   const sceneRef = useRef(scene);
   sceneRef.current = scene;
+  const musicRef = useRef(music);
+  musicRef.current = music;
   const [syncError, setSyncError] = useState<string>();
   const online = isFirebaseConfigured && Boolean(db);
 
   useEffect(() => {
     setCharacter(blankCharacter(user));
+    setCharacters([]);
     setHasCharacter(false);
     setRolls([]);
     setTokens([]);
@@ -122,6 +130,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
     setSheetTemplate(DEFAULT_SHEET_TEMPLATE);
     setNotes(initialNotes);
     setParticipants([]);
+    setInitiative(initialInitiative);
     setSyncError(undefined);
     if (!online || !db || !campaignId || !user.id) return;
 
@@ -136,18 +145,10 @@ export function useGameSession(campaignId: string, user: AppUser) {
       },
       () => setSyncError("Sem permissão para acessar esta campanha."),
     );
-    const unsubscribeCharacter = onSnapshot(
-      doc(db, "campaigns", campaignId, "characters", user.id),
-      (snapshot) => {
-        if (snapshot.exists()) {
-          setCharacter({ id: snapshot.id, ...snapshot.data() } as Character);
-          setHasCharacter(true);
-        } else {
-          setCharacter(blankCharacter(user));
-          setHasCharacter(false);
-        }
-      },
-      () => setSyncError("Sua ficha não pôde ser carregada."),
+    const unsubscribeCharacters = onSnapshot(
+      collection(db, "campaigns", campaignId, "characters"),
+      (snapshot) => setCharacters(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Character)),
+      () => setSyncError("As fichas não puderam ser carregadas."),
     );
     const unsubscribeRolls = onSnapshot(
       query(collection(db, "campaigns", campaignId, "dicerolls"), orderBy("createdAt", "desc"), limit(30)),
@@ -186,15 +187,20 @@ export function useGameSession(campaignId: string, user: AppUser) {
     );
     const unsubscribeMusic = onSnapshot(
       doc(db, "campaigns", campaignId, "music", "current"),
-      (snapshot) => setMusic(snapshot.exists() ? {
-        youtubeUrl: String(snapshot.data().youtubeUrl ?? ""),
-        title: String(snapshot.data().title ?? ""),
-        loop: Boolean(snapshot.data().loop),
-        playing: Boolean(snapshot.data().playing),
-        position: Number(snapshot.data().position ?? 0),
-        startedAt: snapshot.data().startedAt?.toMillis?.() ?? undefined,
-        updatedAt: snapshot.data().updatedAt?.toMillis?.() ?? undefined,
-      } : initialMusic),
+      (snapshot) => {
+        const value = snapshot.data({ serverTimestamps: "estimate" });
+        const next = snapshot.exists() ? {
+          youtubeUrl: String(value?.youtubeUrl ?? ""),
+          title: String(value?.title ?? ""),
+          loop: Boolean(value?.loop),
+          playing: Boolean(value?.playing),
+          position: Number(value?.position ?? 0),
+          startedAt: value?.startedAt?.toMillis?.() ?? undefined,
+          updatedAt: value?.updatedAt?.toMillis?.() ?? undefined,
+        } : initialMusic;
+        musicRef.current = next;
+        setMusic(next);
+      },
       () => setSyncError("A trilha da campanha não pôde ser sincronizada."),
     );
     const unsubscribeChat = onSnapshot(
@@ -203,6 +209,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
         id: item.id,
         ...item.data(),
         createdAt: item.data().createdAt?.toMillis?.() ?? Date.now(),
+        editedAt: item.data().editedAt?.toMillis?.() ?? undefined,
       }) as ChatMessage).reverse()),
       () => setSyncError("O chat da sessão não pôde ser sincronizado."),
     );
@@ -212,19 +219,35 @@ export function useGameSession(campaignId: string, user: AppUser) {
         id: item.id,
         ...item.data(),
         createdAt: item.data().createdAt?.toMillis?.() ?? Date.now(),
+        editedAt: item.data().editedAt?.toMillis?.() ?? undefined,
       }) as ChatMessage).sort((a, b) => a.createdAt - b.createdAt)),
       () => setSyncError("Os sussurros da sessão não puderam ser sincronizados."),
     );
     const unsubscribeMembers = onSnapshot(
       collection(db, "campaigns", campaignId, "members"),
       (snapshot) => setParticipants(snapshot.docs.map((item) => ({
-        userId: item.id,
         ...item.data(),
+        userId: item.id,
         present: item.data().present !== false,
         lastSeenAt: item.data().lastSeenAt?.toMillis?.() ?? undefined,
         joinedAt: item.data().joinedAt?.toMillis?.() ?? undefined,
+        typingAt: item.data().typingAt?.toMillis?.() ?? undefined,
       }) as CampaignMember)),
       () => setSyncError("Os participantes não puderam ser sincronizados."),
+    );
+    const unsubscribeInitiative = onSnapshot(
+      doc(db, "campaigns", campaignId, "initiative", "current"),
+      (snapshot) => {
+        const value = snapshot.data({ serverTimestamps: "estimate" });
+        setInitiative(snapshot.exists() ? {
+          entries: Array.isArray(value?.entries) ? value.entries : [],
+          activeIndex: Number(value?.activeIndex ?? -1),
+          round: Number(value?.round ?? 0),
+          running: Boolean(value?.running),
+          updatedAt: value?.updatedAt?.toMillis?.() ?? undefined,
+        } as InitiativeState : initialInitiative);
+      },
+      () => setSyncError("A iniciativa não pôde ser sincronizada."),
     );
     const unsubscribeNotes = onSnapshot(
       doc(db, "campaigns", campaignId, "notes", user.id),
@@ -245,14 +268,14 @@ export function useGameSession(campaignId: string, user: AppUser) {
     }, { merge: true });
     // Marcar a saida evita que o jogador continue "na mesa" ate o batimento
     // expirar. O pagehide e melhor esforco: pode nao completar se a aba morrer.
-    const markAway = () => void setDoc(memberRef, { present: false }, { merge: true });
+    const markAway = () => void setDoc(memberRef, { present: false, typingConversationId: "", typingAt: null }, { merge: true });
     void refreshPresence();
     const presenceTimer = window.setInterval(() => void refreshPresence(), 25000);
     window.addEventListener("pagehide", markAway);
 
     return () => {
       unsubscribeCampaign();
-      unsubscribeCharacter();
+      unsubscribeCharacters();
       unsubscribeRolls();
       unsubscribeTokens();
       unsubscribeScene();
@@ -261,6 +284,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
       unsubscribeChat();
       unsubscribeWhispers();
       unsubscribeMembers();
+      unsubscribeInitiative();
       unsubscribeNotes();
       window.clearInterval(presenceTimer);
       window.removeEventListener("pagehide", markAway);
@@ -268,19 +292,42 @@ export function useGameSession(campaignId: string, user: AppUser) {
     };
   }, [campaignId, online, user]);
 
+  useEffect(() => {
+    const member = participants.find((item) => item.userId === user.id);
+    const legacyCharacter = characters.find((item) => item.id === user.id);
+    const assignedId = member?.characterId === undefined ? legacyCharacter?.id : member.characterId ?? undefined;
+    const assigned = assignedId ? characters.find((item) => item.id === assignedId) : undefined;
+    if (assigned) {
+      setCharacter(assigned);
+      setHasCharacter(true);
+    } else {
+      setCharacter(blankCharacter(user));
+      setHasCharacter(false);
+    }
+  }, [characters, participants, user]);
+
   const saveCharacter = useCallback(async (next: Character) => {
-    const saved = { ...next, id: user.id, ownerId: user.id };
+    const member = participants.find((item) => item.userId === user.id);
+    const legacyCharacter = characters.find((item) => item.id === user.id);
+    const assignedId = member?.characterId === undefined ? legacyCharacter?.id : member.characterId ?? undefined;
+    const characterId = assignedId || user.id;
+    const existing = characters.find((item) => item.id === characterId);
+    const controllerIds = Array.from(new Set([...(existing?.controllerIds ?? (existing ? [existing.ownerId] : [])), user.id]));
+    const saved: Character = { ...next, id: characterId, ownerId: existing?.ownerId ?? next.ownerId ?? user.id, controllerIds };
     setCharacter(saved);
+    setCharacters((current) => [...current.filter((item) => item.id !== saved.id), saved]);
+    setParticipants((current) => current.map((item) => item.userId === user.id ? { ...item, characterId } : item));
     setHasCharacter(true);
     if (!online || !db) return;
 
     const cleanName = saved.name.trim() || user.name;
     const initials = cleanName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
-    await Promise.all([
-      setDoc(doc(db, "campaigns", campaignId, "characters", user.id), saved),
-      setDoc(doc(db, "campaigns", campaignId, "tokens", user.id), {
-        id: user.id,
-        ownerId: user.id,
+    const batch = writeBatch(db);
+    batch.set(doc(db, "campaigns", campaignId, "characters", characterId), saved);
+    batch.set(doc(db, "campaigns", campaignId, "tokens", characterId), {
+        id: characterId,
+        ownerId: saved.ownerId,
+        controllerIds,
         name: cleanName,
         initials,
         x: 50,
@@ -288,9 +335,65 @@ export function useGameSession(campaignId: string, user: AppUser) {
         color: "#8b73d8",
         imageUrl: saved.imageUrl ?? "",
         kind: "hero",
-      }, { merge: true }),
-    ]);
-  }, [campaignId, online, user.id, user.name]);
+      }, { merge: true });
+    batch.set(doc(db, "campaigns", campaignId, "members", user.id), { characterId }, { merge: true });
+    await batch.commit();
+  }, [campaignId, characters, online, participants, user.id, user.name]);
+
+  const assignCharacter = useCallback(async (memberId: string, nextCharacterId?: string) => {
+    const member = participants.find((item) => item.userId === memberId);
+    if (!member) throw new Error("Participante não encontrado.");
+    if (gmId !== user.id && memberId !== user.id) throw new Error("Somente o mestre pode vincular personagens de outros jogadores.");
+    const legacyCharacter = characters.find((item) => item.id === memberId);
+    const previousCharacterId = member.characterId === undefined ? legacyCharacter?.id : member.characterId ?? undefined;
+    if (nextCharacterId && !characters.some((item) => item.id === nextCharacterId)) throw new Error("Personagem não encontrada.");
+
+    const updateControllers = (ids: string[] | undefined, add: boolean) => {
+      const current = ids ?? [];
+      return add ? Array.from(new Set([...current, memberId])) : current.filter((id) => id !== memberId);
+    };
+    setParticipants((current) => current.map((item) => item.userId === memberId ? { ...item, characterId: nextCharacterId ?? null } : item));
+    setCharacters((current) => current.map((item) => item.id === previousCharacterId && previousCharacterId !== nextCharacterId
+      ? { ...item, controllerIds: updateControllers(item.controllerIds ?? [item.ownerId], false) }
+      : item.id === nextCharacterId && previousCharacterId !== nextCharacterId
+        ? { ...item, controllerIds: updateControllers(item.controllerIds ?? [item.ownerId], true) }
+        : item));
+    setTokens((current) => current
+      .map((item) => item.id === previousCharacterId && previousCharacterId !== nextCharacterId ? { ...item, controllerIds: updateControllers(item.controllerIds ?? [item.ownerId], false) } : item)
+      .filter((item) => item.id !== previousCharacterId || Boolean(item.controllerIds?.length)));
+    if (!online || !db) return;
+
+    const batch = writeBatch(db);
+    batch.set(doc(db, "campaigns", campaignId, "members", memberId), { characterId: nextCharacterId ?? null }, { merge: true });
+    if (previousCharacterId && previousCharacterId !== nextCharacterId) {
+      const previous = characters.find((item) => item.id === previousCharacterId);
+      const previousControllers = updateControllers(previous?.controllerIds ?? (previous ? [previous.ownerId] : [memberId]), false);
+      batch.update(doc(db, "campaigns", campaignId, "characters", previousCharacterId), { controllerIds: arrayRemove(memberId) });
+      if (tokens.some((item) => item.id === previousCharacterId)) {
+        if (previousControllers.length) batch.update(doc(db, "campaigns", campaignId, "tokens", previousCharacterId), { controllerIds: arrayRemove(memberId) });
+        else batch.delete(doc(db, "campaigns", campaignId, "tokens", previousCharacterId));
+      }
+    }
+    if (nextCharacterId && previousCharacterId !== nextCharacterId) {
+      const nextCharacter = characters.find((item) => item.id === nextCharacterId)!;
+      const nextControllers = updateControllers(nextCharacter.controllerIds ?? [nextCharacter.ownerId], true);
+      batch.update(doc(db, "campaigns", campaignId, "characters", nextCharacterId), { controllerIds: arrayUnion(memberId) });
+      const cleanName = nextCharacter.name.trim() || member.name;
+      batch.set(doc(db, "campaigns", campaignId, "tokens", nextCharacterId), {
+        id: nextCharacterId,
+        ownerId: nextCharacter.ownerId,
+        controllerIds: nextControllers,
+        name: cleanName,
+        initials: cleanName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
+        x: 50,
+        y: 60,
+        color: "#8b73d8",
+        imageUrl: nextCharacter.imageUrl ?? "",
+        kind: "hero",
+      }, { merge: true });
+    }
+    await batch.commit();
+  }, [campaignId, characters, gmId, online, participants, tokens, user.id]);
 
   const rollDie = useCallback(async (sides: number, modifier: number, quantity = 1, validationMode: DiceValidationMode = "sum") => {
     const safeQuantity = Math.max(1, Math.min(20, Math.round(quantity)));
@@ -316,7 +419,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
     const token = tokens.find((item) => item.id === tokenId);
     if (!token) return;
     const isGM = gmId === user.id;
-    if (!isGM && token.ownerId !== user.id) return;
+    if (!isGM && token.ownerId !== user.id && !token.controllerIds?.includes(user.id)) return;
     if (token.locked && token.lockedBy && token.lockedBy !== user.id && !isGM) return;
     const lockPatch = token.locked ? { locked: false, lockedBy: "" } : { locked: true, lockedBy: user.id };
     setTokens((current) => current.map((item) => item.id === tokenId ? { ...item, ...lockPatch } : item));
@@ -394,7 +497,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
     if (online && db) await setDoc(doc(db, "campaigns", campaignId, "tokens", tokenId), { visionRadius: normalized }, { merge: true });
   }, [campaignId, online]);
 
-  const sendChatMessage = useCallback(async (text: string, image?: { imageUrl: string; driveFileId: string }, spoiler = false, recipient?: CampaignMember) => {
+  const sendChatMessage = useCallback(async (text: string, image?: { imageUrl: string; driveFileId: string }, spoiler = false, recipient?: CampaignMember, mentionIds: string[] = []) => {
     const cleanText = text.trim().slice(0, 2000);
     if (!cleanText && !image) return;
     const whisperParticipantIds = recipient ? [user.id, recipient.userId].sort() : undefined;
@@ -404,6 +507,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
       userName: user.name,
       text: cleanText,
       createdAt: Date.now(),
+      mentionIds: Array.from(new Set(mentionIds)).filter((id) => participants.some((member) => member.userId === id)).slice(0, 20),
       ...(user.avatarUrl ? { userAvatarUrl: user.avatarUrl } : {}),
       ...(image ? image : {}),
       ...(image && spoiler ? { spoiler: true } : {}),
@@ -417,7 +521,32 @@ export function useGameSession(campaignId: string, user: AppUser) {
     const { id: _id, createdAt: _createdAt, ...payload } = next;
     const collectionName = recipient ? "whispers" : "chatMessages";
     await addDoc(collection(db, "campaigns", campaignId, collectionName), { ...payload, createdAt: serverTimestamp() });
-  }, [campaignId, online, user.avatarUrl, user.id, user.name]);
+  }, [campaignId, online, participants, user.avatarUrl, user.id, user.name]);
+
+  const editChatMessage = useCallback(async (message: ChatMessage, text: string) => {
+    if (message.userId !== user.id) throw new Error("Você só pode editar suas próprias mensagens.");
+    const cleanText = text.trim().slice(0, 2000);
+    if (!cleanText && !message.imageUrl) throw new Error("A mensagem não pode ficar vazia.");
+    const editedAt = Date.now();
+    const update = (current: ChatMessage[]) => current.map((item) => item.id === message.id ? { ...item, text: cleanText, editedAt } : item);
+    if (message.recipientId) setWhisperMessages(update); else setChatMessages(update);
+    if (online && db) await updateDoc(doc(db, "campaigns", campaignId, message.recipientId ? "whispers" : "chatMessages", message.id), { text: cleanText, editedAt: serverTimestamp() });
+  }, [campaignId, online, user.id]);
+
+  const deleteChatMessage = useCallback(async (message: ChatMessage) => {
+    if (message.userId !== user.id && gmId !== user.id) throw new Error("Você não pode excluir esta mensagem.");
+    const remove = (current: ChatMessage[]) => current.filter((item) => item.id !== message.id);
+    if (message.recipientId) setWhisperMessages(remove); else setChatMessages(remove);
+    if (online && db) await deleteDoc(doc(db, "campaigns", campaignId, message.recipientId ? "whispers" : "chatMessages", message.id));
+  }, [campaignId, gmId, online, user.id]);
+
+  const setTyping = useCallback(async (conversationId?: string) => {
+    setParticipants((current) => current.map((member) => member.userId === user.id ? { ...member, typingConversationId: conversationId ?? "", typingAt: conversationId ? Date.now() : undefined } : member));
+    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "members", user.id), {
+      typingConversationId: conversationId ?? "",
+      typingAt: conversationId ? serverTimestamp() : null,
+    }, { merge: true });
+  }, [campaignId, online, user.id]);
 
   const saveJournal = useCallback(async (content: string) => {
     const next: CampaignJournal = { content: content.slice(0, 20000), updatedBy: user.id, updatedByName: user.name, updatedAt: Date.now() };
@@ -437,14 +566,45 @@ export function useGameSession(campaignId: string, user: AppUser) {
   }, [campaignId, online]);
 
   const saveMusic = useCallback(async (next: CampaignMusic) => {
-    const saved = { ...next, position: Math.max(0, next.position || 0), updatedAt: Date.now() };
+    const current = musicRef.current;
+    const youtubeUrl = next.youtubeUrl.trim();
+    const trackChanged = youtubeUrl !== current.youtubeUrl;
+    const saved: CampaignMusic = {
+      ...current,
+      youtubeUrl,
+      title: next.title.trim(),
+      loop: next.loop,
+      ...(trackChanged ? { playing: false, position: 0, startedAt: undefined } : {}),
+      updatedAt: Date.now(),
+    };
+    musicRef.current = saved;
     setMusic(saved);
-    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "music", "current"), { ...saved, startedAt: saved.playing ? serverTimestamp() : null, updatedAt: serverTimestamp() });
+    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "music", "current"), {
+      youtubeUrl: saved.youtubeUrl,
+      title: saved.title,
+      loop: saved.loop,
+      ...(trackChanged ? { playing: false, position: 0, startedAt: null } : {}),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+  }, [campaignId, online]);
+
+  const saveInitiative = useCallback(async (nextInitiative: InitiativeState) => {
+    const entries = nextInitiative.entries.slice(0, 100).map((entry) => ({ ...entry, name: entry.name.trim().slice(0, 80), initiative: Math.round(entry.initiative) }));
+    const saved = {
+      ...nextInitiative,
+      entries,
+      activeIndex: Math.max(-1, Math.min(nextInitiative.activeIndex, entries.length - 1)),
+      round: Math.max(0, Math.round(nextInitiative.round)),
+      updatedAt: Date.now(),
+    };
+    setInitiative(saved);
+    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "initiative", "current"), { ...saved, updatedAt: serverTimestamp() });
   }, [campaignId, online]);
 
   const updateMusicPlayback = useCallback(async (playing: boolean, position: number) => {
     const safePosition = Math.max(0, position);
-    const next = { ...music, playing, position: safePosition, startedAt: playing ? Date.now() : undefined, updatedAt: Date.now() };
+    const next = { ...musicRef.current, playing, position: safePosition, startedAt: playing ? Date.now() : undefined, updatedAt: Date.now() };
+    musicRef.current = next;
     setMusic(next);
     if (online && db) await setDoc(doc(db, "campaigns", campaignId, "music", "current"), {
       playing,
@@ -452,7 +612,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
       startedAt: playing ? serverTimestamp() : null,
       updatedAt: serverTimestamp(),
     }, { merge: true });
-  }, [campaignId, music, online]);
+  }, [campaignId, online]);
 
   const clearChat = useCallback(async () => {
     setChatMessages([]);
@@ -472,7 +632,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
   }, [campaignId, online]);
 
   return useMemo(() => ({
-    character, hasCharacter, rolls, tokens, scene, journal, music, sheetTemplate, chatMessages, whisperMessages, notes, participants, isGM: gmId === user.id, online, syncError,
-    saveCharacter, rollDie, moveToken, toggleTokenLock, addToken, removeToken, setTokenHidden, saveScene, clearRevealed, commitRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveMusic, updateMusicPlayback,
-  }), [addToken, character, chatMessages, clearChat, clearRevealed, commitRevealed, setTokenHidden, createLight, deleteLight, gmId, hasCharacter, journal, moveLight, moveToken, music, notes, online, participants, removeToken, rollDie, rolls, saveCharacter, saveJournal, saveMusic, saveNotes, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, sheetTemplate, syncError, toggleTokenLock, tokens, updateLight, updateMusicPlayback, user.id, whisperMessages]);
+    character, characters, hasCharacter, rolls, tokens, scene, journal, music, initiative, sheetTemplate, chatMessages, whisperMessages, notes, participants, isGM: gmId === user.id, online, syncError,
+    saveCharacter, assignCharacter, rollDie, moveToken, toggleTokenLock, addToken, removeToken, setTokenHidden, saveScene, clearRevealed, commitRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, editChatMessage, deleteChatMessage, setTyping, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveInitiative, saveMusic, updateMusicPlayback,
+  }), [addToken, assignCharacter, character, characters, chatMessages, clearChat, clearRevealed, commitRevealed, setTokenHidden, createLight, deleteChatMessage, deleteLight, editChatMessage, gmId, hasCharacter, initiative, journal, moveLight, moveToken, music, notes, online, participants, removeToken, rollDie, rolls, saveCharacter, saveInitiative, saveJournal, saveMusic, saveNotes, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, setTyping, sheetTemplate, syncError, toggleTokenLock, tokens, updateLight, updateMusicPlayback, user.id, whisperMessages]);
 }

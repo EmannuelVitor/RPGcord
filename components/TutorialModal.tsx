@@ -14,6 +14,7 @@ import {
   Radio,
   ScrollText,
   Sparkles,
+  Swords,
   Users,
   X,
 } from "lucide-react";
@@ -37,7 +38,7 @@ const steps: TutorialStep[] = [
     actions: [
       "Clique em Criar campanha para abrir uma nova mesa como mestre.",
       "Escolha uma campanha existente para continuar uma aventura.",
-      "Clique no nome da campanha, no topo da mesa, para voltar ao salão.",
+      "Clique no nome da campanha para ver os detalhes ou use Voltar ao início para retornar ao salão.",
     ],
     tip: "Se você criar a campanha, receberá automaticamente as ferramentas de mestre.",
   },
@@ -47,7 +48,7 @@ const steps: TutorialStep[] = [
     title: "Convide seu grupo",
     description: "O mestre pode gerar um link e um código de convite exclusivos para a campanha.",
     actions: [
-      "Na mesa, use Convidar jogadores no menu do mestre ou o botão Convidar no topo.",
+      "Na mesa, use Convidar jogadores no menu do mestre ou o botão circular ao lado dos participantes.",
       "Copie o link e envie para seus amigos.",
       "O jogador entra com Google e confirma o código no Salão de Campanhas.",
     ],
@@ -57,14 +58,28 @@ const steps: TutorialStep[] = [
     icon: ScrollText,
     eyebrow: "Seu aventureiro",
     title: "Crie e mantenha sua ficha",
-    description: "Cada jogador possui uma ficha diferente em cada campanha, vinculada à própria conta.",
+    description: "Uma personagem pode ser vinculada a uma ou mais contas na campanha, enquanto o mestre decide se também deseja ter uma ficha.",
     actions: [
       "Clique em Criar ficha ou Minha ficha.",
       "Preencha nome, ancestralidade, classe, nível, vida e armadura.",
       "Envie uma imagem do computador ou cole um link público para usá-la também no pino.",
       "Configure atributos, perícias e inventário e clique em Salvar ficha.",
+      "O mestre vincula personagens aos participantes pela lista de jogadores; a mesma ficha pode ser compartilhada por várias contas.",
     ],
     tip: "Ao salvar a ficha pela primeira vez, seu pino também é criado automaticamente no mapa.",
+  },
+  {
+    icon: Swords,
+    eyebrow: "Ordem de combate",
+    title: "Acompanhe a iniciativa",
+    description: "A ordem, o turno atual e a rodada ficam sincronizados para toda a mesa durante o combate.",
+    actions: [
+      "Abra Iniciativa no grupo Combate do menu lateral.",
+      "O mestre adiciona pinos ou participantes avulsos e informa os valores.",
+      "Também é possível rolar automaticamente a iniciativa de todos os pinos.",
+      "Use Anterior e Próximo para conduzir os turnos e avançar as rodadas.",
+    ],
+    tip: "Jogadores acompanham a ordem em tempo real; somente o mestre altera o combate.",
   },
   {
     icon: Dices,
@@ -114,10 +129,12 @@ const steps: TutorialStep[] = [
     title: "Compartilhe mensagens e imagens",
     description: "O chat mantém as 100 mensagens mais recentes da sessão sincronizadas com todos os integrantes da campanha.",
     actions: [
-      "Abra Chat da sessão no menu ou use o botão Chat no topo.",
+      "Abra Chat da sessão no menu ou use o botão flutuante no canto da tela.",
       "Escreva uma mensagem ou selecione uma imagem JPG, PNG, WebP ou GIF de até 4 MB.",
       "Enter envia a mensagem; Shift+Enter cria uma nova linha.",
       "Marque uma imagem como spoiler para ocultá-la até cada jogador clicar.",
+      "Digite @ para mencionar alguém e acompanhe quando outra pessoa estiver digitando.",
+      "Edite suas mensagens ou exclua mensagens próprias; o mestre também pode moderar exclusões.",
       "As imagens ficam na pasta do Google Drive configurada para o RPGcord.",
       "O mestre pode apagar o histórico temporário usando o ícone da lixeira.",
     ],
@@ -141,7 +158,7 @@ const steps: TutorialStep[] = [
     title: "Adicione músicas do YouTube",
     description: "O mestre escolhe um vídeo ou playlist e controla a reprodução sincronizada para toda a campanha.",
     actions: [
-      "Abra Música da campanha no menu ou no topo da mesa.",
+      "Abra Música da campanha no menu; a configuração aparece em uma janela própria.",
       "O mestre cola o link do vídeo ou playlist, define um nome e escolhe se deseja repetir.",
       "Cada participante clica uma vez em Ativar áudio sincronizado.",
       "Depois disso, tocar, pausar e buscar são comandados pelo mestre para todo o grupo.",

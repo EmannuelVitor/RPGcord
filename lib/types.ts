@@ -28,11 +28,17 @@ export type CampaignMember = {
   lastSeenAt?: number;
   /** Falso quando a aba foi fechada de forma limpa. */
   present?: boolean;
+  /** Personagem vinculado à conta; null representa uma opção explícita por jogar sem ficha. */
+  characterId?: string | null;
+  typingConversationId?: string;
+  typingAt?: number;
 };
 
 export type Character = {
   id: string;
   ownerId: string;
+  /** Contas que podem usar e editar a mesma personagem. */
+  controllerIds?: string[];
   name: string;
   ancestry: string;
   characterClass: string;
@@ -92,6 +98,8 @@ export type DiceRoll = {
 export type MapToken = {
   id: string;
   ownerId: string;
+  /** Contas autorizadas a controlar este pino de personagem. */
+  controllerIds?: string[];
   name: string;
   initials: string;
   x: number;
@@ -164,7 +172,9 @@ export type ChatMessage = {
   recipientName?: string;
   participantIds?: string[];
   conversationId?: string;
+  mentionIds?: string[];
   createdAt: number;
+  editedAt?: number;
 };
 
 export type CampaignJournal = {
@@ -189,5 +199,20 @@ export type CampaignMusic = {
   playing: boolean;
   position: number;
   startedAt?: number;
+  updatedAt?: number;
+};
+
+export type InitiativeEntry = {
+  id: string;
+  tokenId?: string;
+  name: string;
+  initiative: number;
+};
+
+export type InitiativeState = {
+  entries: InitiativeEntry[];
+  activeIndex: number;
+  round: number;
+  running: boolean;
   updatedAt?: number;
 };

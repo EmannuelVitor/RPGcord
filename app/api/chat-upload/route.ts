@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     const stored = await uploadChatImage(file, `${campaignId}-${purpose}-${Date.now()}-${cleanFileName(file.name)}`);
     return NextResponse.json({
       driveFileId: stored.id,
-      imageUrl: `/api/drive-image?id=${encodeURIComponent(stored.id)}`,
+      imageUrl: `/api/drive-image?id=${encodeURIComponent(stored.id)}&campaignId=${encodeURIComponent(campaignId)}`,
     });
   } catch (reason) {
     const message = reason instanceof Error ? reason.message : "Não foi possível enviar a imagem.";

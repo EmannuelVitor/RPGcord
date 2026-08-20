@@ -66,7 +66,9 @@ export function MusicPanel({ music, isGM, embedded = false, onSave, onClose }: P
           {hasMusic
             ? <div className="music-shared-status"><Music2 /><div><strong>{music.title || "Trilha selecionada"}</strong><span>{music.playing ? "Tocando sincronizada para o grupo" : "Pausada pelo mestre"}</span></div></div>
             : <div className="music-empty"><Music2 /><strong>Nenhuma trilha selecionada</strong><span>O mestre pode adicionar um vídeo ou uma playlist do YouTube.</span></div>}
-          <p className="music-note">Os controles de tocar, pausar e buscar ficam no orbe flutuante, no canto da tela. Cada participante precisa ativar o áudio uma vez; depois disso o mestre comanda a reprodução para o grupo inteiro.</p>
+          <p className="music-note">{isGM
+            ? "Somente o mestre controla reprodução, pausa e posição pelo orbe flutuante. Os participantes ativam o áudio e regulam apenas o próprio volume."
+            : "A reprodução é controlada exclusivamente pelo mestre. Ative o áudio no orbe flutuante; seu único controle individual é o volume."}</p>
           {isGM ? (
             <form className="music-form" onSubmit={submit}>
               <label>Nome da trilha<input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="Ex.: Exploração da floresta" /></label>

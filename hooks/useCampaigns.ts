@@ -138,14 +138,13 @@ export function useCampaigns(user: AppUser) {
 
   /**
    * Sai da campanha. As regras deixam o jogador retirar apenas o proprio id de
-   * memberIds; o pino e as notas saem no mesmo lote, enquanto a filiacao ainda
+   * memberIds; as notas saem no mesmo lote, enquanto a filiacao ainda
    * vale, porque depois disso ele perde o acesso. A ficha fica guardada caso
    * ele volte pelo mesmo convite.
    */
   const leaveCampaign = useCallback(async (campaignId: string) => {
     if (!db) throw new Error("Firestore indisponível.");
     const batch = writeBatch(db);
-    batch.delete(doc(db, "campaigns", campaignId, "tokens", user.id));
     batch.delete(doc(db, "campaigns", campaignId, "notes", user.id));
     batch.delete(doc(db, "campaigns", campaignId, "members", user.id));
     batch.update(doc(db, "campaigns", campaignId), { memberIds: arrayRemove(user.id) });
@@ -157,7 +156,6 @@ export function useCampaigns(user: AppUser) {
   const removeMember = useCallback(async (campaignId: string, memberId: string) => {
     if (!db) throw new Error("Firestore indisponível.");
     const batch = writeBatch(db);
-    batch.delete(doc(db, "campaigns", campaignId, "tokens", memberId));
     batch.delete(doc(db, "campaigns", campaignId, "members", memberId));
     batch.update(doc(db, "campaigns", campaignId), { memberIds: arrayRemove(memberId) });
     await batch.commit();

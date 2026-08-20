@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Download, Moon, Settings, Sun, X } from "lucide-react";
+import { Check, Download, ExternalLink, Github, Moon, Settings, Sun, X } from "lucide-react";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import type { useTheme } from "@/hooks/useTheme";
 import { useInstallPrompt } from "@/hooks/useInstallPrompt";
@@ -34,6 +34,12 @@ export function SettingsPanel({ appearance, embedded = false, onClose }: Props) 
           ) : (
             <p>Para instalar, use a opção <strong>Instalar aplicativo</strong> do seu navegador. No iPhone, use <strong>Compartilhar → Adicionar à Tela de Início</strong>.</p>
           )}
+
+          <h3>Créditos</h3>
+          <div className="credits-list">
+            <a href="https://github.com/ErickMascarenhas" target="_blank" rel="noreferrer"><Github size={17} /><span><strong>Erick Mascarenhas</strong><small>Desenvolvimento e direção do projeto</small></span><ExternalLink size={14} /></a>
+            <a href="https://github.com/EmannuelVitor" target="_blank" rel="noreferrer"><Github size={17} /><span><strong>Emannuel Vitor</strong><small>Desenvolvimento e colaboração</small></span><ExternalLink size={14} /></a>
+          </div>
         </section>
       </aside>
     </div>

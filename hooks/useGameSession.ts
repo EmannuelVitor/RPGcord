@@ -22,7 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveRoll, rollOne } from "@/lib/dice";
 import { db, isFirebaseConfigured } from "@/lib/firebase";
 import { DEFAULT_SHEET_TEMPLATE, normalizeSheetTemplate } from "@/lib/sheet-template";
-import type { AppUser, CampaignJournal, CampaignMember, CampaignMusic, Character, CharacterNotes, ChatMessage, DiceRoll, DiceValidationMode, FogArea, LightSource, MapToken, Scene, SheetTemplate } from "@/lib/types";
+import type { AppUser, CampaignJournal, CampaignMember, CampaignMusic, Character, CharacterNotes, ChatMessage, DiceRoll, DiceValidationMode, FogArea, InitiativeState, LightSource, MapToken, Scene, SheetTemplate } from "@/lib/types";
 
 function blankCharacter(user: AppUser): Character {
   return {
@@ -80,6 +80,7 @@ function dedupeRevealed(areas: FogArea[]) {
 const initialJournal: CampaignJournal = { content: "" };
 const initialMusic: CampaignMusic = { youtubeUrl: "", title: "", loop: false, playing: false, position: 0 };
 const initialNotes: CharacterNotes = { content: "", shareWithGM: false, sharedWithPlayerIds: [] };
+const initialInitiative: InitiativeState = { entries: [], activeIndex: -1, round: 0, running: false };
 
 function normalizeLight(light: LightSource): LightSource {
   const dimRadius = Math.max(3, Math.min(45, light.dimRadius ?? light.radius ?? 16));
@@ -104,6 +105,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
   const [sheetTemplate, setSheetTemplate] = useState<SheetTemplate>(DEFAULT_SHEET_TEMPLATE);
   const [notes, setNotes] = useState<CharacterNotes>(initialNotes);
   const [participants, setParticipants] = useState<CampaignMember[]>([]);
+  const [initiative, setInitiative] = useState<InitiativeState>(initialInitiative);
   const [gmId, setGmId] = useState("");
   // Espelha a cena para que as acoes rapidas do mapa nao leiam um valor velho
   // capturado no fechamento do callback.
@@ -128,6 +130,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
     setSheetTemplate(DEFAULT_SHEET_TEMPLATE);
     setNotes(initialNotes);
     setParticipants([]);
+    setInitiative(initialInitiative);
     setSyncError(undefined);
     if (!online || !db || !campaignId || !user.id) return;
 
@@ -229,6 +232,20 @@ export function useGameSession(campaignId: string, user: AppUser) {
       }) as CampaignMember)),
       () => setSyncError("Os participantes não puderam ser sincronizados."),
     );
+    const unsubscribeInitiative = onSnapshot(
+      doc(db, "campaigns", campaignId, "initiative", "current"),
+      (snapshot) => {
+        const value = snapshot.data({ serverTimestamps: "estimate" });
+        setInitiative(snapshot.exists() ? {
+          entries: Array.isArray(value?.entries) ? value.entries : [],
+          activeIndex: Number(value?.activeIndex ?? -1),
+          round: Number(value?.round ?? 0),
+          running: Boolean(value?.running),
+          updatedAt: value?.updatedAt?.toMillis?.() ?? undefined,
+        } as InitiativeState : initialInitiative);
+      },
+      () => setSyncError("A iniciativa não pôde ser sincronizada."),
+    );
     const unsubscribeNotes = onSnapshot(
       doc(db, "campaigns", campaignId, "notes", user.id),
       (snapshot) => setNotes(snapshot.exists() ? {
@@ -264,6 +281,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
       unsubscribeChat();
       unsubscribeWhispers();
       unsubscribeMembers();
+      unsubscribeInitiative();
       unsubscribeNotes();
       window.clearInterval(presenceTimer);
       window.removeEventListener("pagehide", markAway);
@@ -541,6 +559,18 @@ export function useGameSession(campaignId: string, user: AppUser) {
     }, { merge: true });
   }, [campaignId, online]);
 
+  const saveInitiative = useCallback(async (nextInitiative: InitiativeState) => {
+    const saved = {
+      ...nextInitiative,
+      entries: nextInitiative.entries.slice(0, 100).map((entry) => ({ ...entry, name: entry.name.trim().slice(0, 80), initiative: Math.round(entry.initiative) })),
+      activeIndex: Math.max(-1, Math.min(nextInitiative.activeIndex, nextInitiative.entries.length - 1)),
+      round: Math.max(0, Math.round(nextInitiative.round)),
+      updatedAt: Date.now(),
+    };
+    setInitiative(saved);
+    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "initiative", "current"), { ...saved, updatedAt: serverTimestamp() });
+  }, [campaignId, online]);
+
   const updateMusicPlayback = useCallback(async (playing: boolean, position: number) => {
     const safePosition = Math.max(0, position);
     const next = { ...musicRef.current, playing, position: safePosition, startedAt: playing ? Date.now() : undefined, updatedAt: Date.now() };
@@ -572,7 +602,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
   }, [campaignId, online]);
 
   return useMemo(() => ({
-    character, characters, hasCharacter, rolls, tokens, scene, journal, music, sheetTemplate, chatMessages, whisperMessages, notes, participants, isGM: gmId === user.id, online, syncError,
-    saveCharacter, assignCharacter, rollDie, moveToken, toggleTokenLock, addToken, removeToken, setTokenHidden, saveScene, clearRevealed, commitRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveMusic, updateMusicPlayback,
-  }), [addToken, assignCharacter, character, characters, chatMessages, clearChat, clearRevealed, commitRevealed, setTokenHidden, createLight, deleteLight, gmId, hasCharacter, journal, moveLight, moveToken, music, notes, online, participants, removeToken, rollDie, rolls, saveCharacter, saveJournal, saveMusic, saveNotes, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, sheetTemplate, syncError, toggleTokenLock, tokens, updateLight, updateMusicPlayback, user.id, whisperMessages]);
+    character, characters, hasCharacter, rolls, tokens, scene, journal, music, initiative, sheetTemplate, chatMessages, whisperMessages, notes, participants, isGM: gmId === user.id, online, syncError,
+    saveCharacter, assignCharacter, rollDie, moveToken, toggleTokenLock, addToken, removeToken, setTokenHidden, saveScene, clearRevealed, commitRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveInitiative, saveMusic, updateMusicPlayback,
+  }), [addToken, assignCharacter, character, characters, chatMessages, clearChat, clearRevealed, commitRevealed, setTokenHidden, createLight, deleteLight, gmId, hasCharacter, initiative, journal, moveLight, moveToken, music, notes, online, participants, removeToken, rollDie, rolls, saveCharacter, saveInitiative, saveJournal, saveMusic, saveNotes, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, sheetTemplate, syncError, toggleTokenLock, tokens, updateLight, updateMusicPlayback, user.id, whisperMessages]);
 }

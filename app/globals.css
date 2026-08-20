@@ -672,6 +672,41 @@ html[data-theme="dark"] .light-preview-tag { background:#4a3a1c;color:#f0d9a6; }
 .credits-list strong { font-size:12px; }
 .credits-list small { margin-top:3px;color:var(--muted);font-size:10px; }
 
+/* Rastreador de iniciativa sincronizado. */
+.initiative-drawer { width:min(470px,100%); }
+.initiative-content { height:calc(100% - 70px);overflow-y:auto;padding:20px; }
+.initiative-round { display:flex;align-items:center;gap:14px;padding:14px;border:1px solid #d9cfef;border-radius:10px;background:var(--tint-violet);color:var(--on-tint-violet); }
+.initiative-round > div { min-width:58px;text-align:center; }
+.initiative-round span { display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em; }
+.initiative-round strong { display:block;margin-top:2px;font:400 24px var(--font-display); }
+.initiative-round p { margin:0;font-size:11px;line-height:1.45; }
+.initiative-round p strong { display:inline;font:700 11px var(--font-inter); }
+.initiative-list { display:grid;gap:6px;margin:16px 0;padding:0;list-style:none; }
+.initiative-list li { display:flex;align-items:center;gap:9px;min-height:52px;padding:7px 8px;border:1px solid var(--line);border-radius:9px;background:var(--field); }
+.initiative-list li.active { border-color:#9a83d4;box-shadow:inset 3px 0 #8067c4;background:var(--tint-violet); }
+.initiative-position { width:20px;color:var(--muted);font-size:10px;text-align:center; }
+.initiative-avatar { width:34px;height:34px;display:grid;place-items:center;flex:none;overflow:hidden;border:2px solid var(--token-color);border-radius:50%;background:var(--token-color);color:#fff;font-size:10px;font-weight:800; }
+.initiative-avatar img { width:100%;height:100%;object-fit:cover; }
+.initiative-list li > div { min-width:0;flex:1; }
+.initiative-list li > div strong,.initiative-list li > div small { display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.initiative-list li > div strong { font-size:11px; }.initiative-list li > div small { margin-top:2px;color:var(--forest-2);font-size:9px; }
+.initiative-list li > input { width:56px;height:34px;padding:4px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink);font-size:13px;font-weight:800;text-align:center; }
+.initiative-list li > b { min-width:34px;color:var(--forest-2);font:400 22px var(--font-display);text-align:center; }
+.initiative-remove { width:28px;height:28px;display:grid;place-items:center;flex:none;border:0;border-radius:6px;background:transparent;color:var(--muted); }
+.initiative-remove:hover { background:var(--tint-red);color:var(--on-tint-red); }
+.initiative-empty { display:flex;flex-direction:column;align-items:center;gap:6px;margin:16px 0;padding:25px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);text-align:center; }
+.initiative-empty strong { color:var(--ink);font-size:12px; }.initiative-empty span { font-size:10px; }
+.initiative-controls { display:flex;justify-content:flex-end;gap:8px;margin:14px 0; }
+.initiative-form { display:grid;grid-template-columns:1fr 105px;gap:10px;padding:15px;border:1px solid var(--line);border-radius:10px;background:var(--panel); }
+.initiative-form h3 { grid-column:1/-1;margin:0;font:400 16px var(--font-display); }
+.initiative-form label { display:flex;flex-direction:column;gap:5px;color:var(--muted);font-size:10px;font-weight:700; }
+.initiative-form label:first-of-type,.initiative-form button { grid-column:1/-1; }
+.initiative-form input,.initiative-form select { width:100%;height:36px;padding:0 9px;border:1px solid var(--line);border-radius:7px;background:var(--field);color:var(--ink);font-size:11px; }
+.initiative-quick-actions { display:flex;justify-content:space-between;gap:8px;margin-top:10px; }
+.initiative-quick-actions button { display:flex;align-items:center;gap:5px;padding:7px;border:0;background:transparent;color:var(--muted);font-size:10px; }
+.initiative-quick-actions button:hover { color:var(--forest-2); }
+.initiative-readonly { margin:14px 0 0;color:var(--muted);font-size:10px;line-height:1.5;text-align:center; }
+
 html[data-theme="dark"] {
   color-scheme:dark;
   --ink:#eeeaf7;

@@ -20,6 +20,7 @@ import {
   ScrollText,
   Settings,
   Sparkles,
+  Swords,
   UserPlus,
   Users,
   Wifi,
@@ -38,6 +39,7 @@ import { DiceHistoryPanel } from "@/components/DiceHistoryPanel";
 import { DiceRoller } from "@/components/DiceRoller";
 import { GameMasterPanel } from "@/components/GameMasterPanel";
 import { InviteDialog } from "@/components/InviteDialog";
+import { InitiativeTracker } from "@/components/InitiativeTracker";
 import { MusicPanel } from "@/components/MusicPanel";
 import { MusicPlayer } from "@/components/MusicPlayer";
 import { ParticipantsPopover } from "@/components/ParticipantsPopover";
@@ -49,7 +51,7 @@ import { useResizablePanels } from "@/hooks/useResizablePanels";
 import { characterNameOf, composeName, isOnline } from "@/lib/display-name";
 import type { AppUser, Campaign, CampaignMember } from "@/lib/types";
 
-type PanelKey = "sheet" | "history" | "chat" | "journal" | "notes" | "settings" | "gm";
+type PanelKey = "sheet" | "history" | "chat" | "journal" | "notes" | "initiative" | "settings" | "gm";
 type WhisperTabKey = `whisper:${string}`;
 type WorkspaceTabKey = PanelKey | WhisperTabKey;
 
@@ -67,6 +69,7 @@ const panelLabels: Record<PanelKey, string> = {
   chat: "Chat",
   journal: "Diário",
   notes: "Notas",
+  initiative: "Iniciativa",
   settings: "Configurações",
   gm: "Mestre",
 };
@@ -77,6 +80,7 @@ const panelIcons: Record<PanelKey, typeof ScrollText> = {
   chat: MessageCircle,
   journal: BookOpen,
   notes: NotebookPen,
+  initiative: Swords,
   settings: Settings,
   gm: Crown,
 };
@@ -272,6 +276,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
     if (panel === "chat") return <SessionChat embedded campaignId={campaign.id} campaignName={campaign.name} user={user} messages={game.chatMessages} whispers={game.whisperMessages} participants={game.participants} tokens={game.tokens} isGM={game.isGM} onSend={game.sendChatMessage} onOpenWhisper={openWhisper} onClear={game.clearChat} onClose={() => closePanel("chat")} />;
     if (panel === "journal") return <CampaignJournal embedded journal={game.journal} isGM={game.isGM} onSave={game.saveJournal} onClose={() => closePanel("journal")} />;
     if (panel === "notes") return <PlayerNotes embedded notes={game.notes} participants={game.participants} userId={user.id} onSave={game.saveNotes} onClose={() => closePanel("notes")} />;
+    if (panel === "initiative") return <InitiativeTracker embedded initiative={game.initiative} tokens={game.tokens} isGM={game.isGM} onSave={game.saveInitiative} onClose={() => closePanel("initiative")} />;
     if (panel === "settings") return <SettingsPanel embedded appearance={appearance} onClose={() => closePanel("settings")} />;
     if (panel === "gm" && game.isGM) return <GameMasterPanel embedded scene={game.scene} tokens={game.tokens} sheetTemplate={game.sheetTemplate} ownerId={user.id} onSaveScene={game.saveScene} onSaveSheetTemplate={game.saveSheetTemplate} onAddToken={game.addToken} onRemoveToken={game.removeToken} onSetTokenHidden={game.setTokenHidden} onClose={() => closePanel("gm")} />;
     return null;
@@ -291,6 +296,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
           <button disabled={!game.hasCharacter} onClick={() => openPanel("notes")}><NotebookPen /> Notas da personagem</button>
           <button onClick={() => openPanel("chat")}><MessageCircle /> Chat da sessão {totalUnread > 0 ? <span>{totalUnread}</span> : null}</button>
           <button onClick={openMusic}><Music2 /> Música da campanha</button>
+          <p className="nav-group">Combate</p><button onClick={() => openPanel("initiative")}><Swords /> Iniciativa</button>
           {game.isGM ? <><p className="nav-group">Mestre</p><button onClick={() => openPanel("gm")}><Crown /> Preparar cena</button><button onClick={() => { setInviteOpen(true); setSidebarOpen(false); }}><UserPlus /> Convidar jogadores</button></> : null}
         </nav>
         <div className="sidebar-bottom">

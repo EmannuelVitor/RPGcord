@@ -197,3 +197,18 @@ export type CampaignMusic = {
   startedAt?: number;
   updatedAt?: number;
 };
+
+export type InitiativeEntry = {
+  id: string;
+  tokenId?: string;
+  name: string;
+  initiative: number;
+};
+
+export type InitiativeState = {
+  entries: InitiativeEntry[];
+  activeIndex: number;
+  round: number;
+  running: boolean;
+  updatedAt?: number;
+};

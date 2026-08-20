@@ -42,16 +42,22 @@ function friendlyAuthError(error: unknown) {
 
 let activityMappingsPatched = false;
 
-async function createProtectedSession() {
+async function createProtectedSession(context: AuthState["context"]) {
   const firebaseUser = auth?.currentUser;
   if (!firebaseUser) return;
   const idToken = await firebaseUser.getIdToken();
-  const response = await fetch("/api/session", { method: "POST", headers: { Authorization: `Bearer ${idToken}` } });
+  const response = await fetch("/api/session", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      "X-RPGcord-Context": context,
+    },
+  });
   if (!response.ok) throw new Error("Não foi possível proteger a sessão de imagens.");
 }
 
-async function clearProtectedSession() {
-  await fetch("/api/session", { method: "DELETE" });
+async function clearProtectedSession(context: AuthState["context"]) {
+  await fetch("/api/session", { method: "DELETE", headers: { "X-RPGcord-Context": context } });
 }
 
 export function useAuth() {
@@ -72,7 +78,7 @@ export function useAuth() {
       const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
         void (async () => {
           try {
-            await (firebaseUser ? createProtectedSession() : clearProtectedSession());
+            await (firebaseUser ? createProtectedSession(context) : clearProtectedSession(context));
           } catch (error) {
             console.error("[RPGcord] Sessão protegida", error);
           }
@@ -134,7 +140,7 @@ export function useAuth() {
         if (!firebaseResponse.ok) throw new Error("Não foi possível autenticar o usuário no Firebase.");
         const { firebaseToken } = (await firebaseResponse.json()) as { firebaseToken: string };
         await signInWithCustomToken(auth!, firebaseToken);
-        await createProtectedSession();
+        await createProtectedSession(context);
 
         if (!active) return;
         const discordUser = session.user;
@@ -173,9 +179,9 @@ export function useAuth() {
   }, []);
 
   const signOutUser = useCallback(async () => {
-    await clearProtectedSession().catch(() => undefined);
+    await clearProtectedSession(state.context).catch(() => undefined);
     if (auth) await signOut(auth);
-  }, []);
+  }, [state.context]);
 
   return { ...state, signInGoogle, signOutUser };
 }

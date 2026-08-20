@@ -100,10 +100,11 @@ function playChatNotification() {
   }
 }
 
-export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutorial }: {
+export function GameWorkspace({ user, campaign, onCampaigns, onRemoveMember, onSignOut, onTutorial }: {
   user: AppUser;
   campaign: Campaign;
   onCampaigns: () => void;
+  onRemoveMember: (campaignId: string, memberId: string) => Promise<void>;
   onSignOut: () => Promise<void>;
   onTutorial: () => void;
 }) {
@@ -310,7 +311,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
             {game.isGM ? <button className="outline-button invite-top" onClick={() => setInviteOpen(true)}><UserPlus size={16} /> Convidar</button> : null}
             <button className="outline-button" onClick={() => openPanel("sheet")}><ScrollText size={16} /> {game.hasCharacter ? "Abrir ficha" : "Criar ficha"}</button>
           </div>
-          {participantsOpen ? <ParticipantsPopover members={game.participants} tokens={game.tokens} currentUserId={user.id} onClose={() => setParticipantsOpen(false)} /> : null}
+          {participantsOpen ? <ParticipantsPopover members={game.participants} tokens={game.tokens} currentUserId={user.id} ownerId={campaign.ownerId} isGM={game.isGM} onRemove={(memberId) => void onRemoveMember(campaign.id, memberId)} onClose={() => setParticipantsOpen(false)} /> : null}
         </header>
 
         {(campaign.description || game.syncError || !game.hasCharacter) ? (

@@ -47,6 +47,8 @@ function CampaignController({ user, onSignOut }: { user: AppUser; onSignOut: () 
           onSelect={campaignState.selectCampaign}
           onCreate={campaignState.createCampaign}
           onJoin={campaignState.joinCampaign}
+          onLeave={campaignState.leaveCampaign}
+          onDelete={campaignState.deleteCampaign}
           onSignOut={onSignOut}
           onTutorial={() => setTutorialOpen(true)}
         />
@@ -56,7 +58,7 @@ function CampaignController({ user, onSignOut }: { user: AppUser; onSignOut: () 
   }
   return (
     <>
-      <WorkspaceView user={user} campaign={campaignState.activeCampaign} onCampaigns={() => campaignState.selectCampaign(undefined)} onSignOut={onSignOut} onTutorial={() => setTutorialOpen(true)} />
+      <WorkspaceView user={user} campaign={campaignState.activeCampaign} onCampaigns={() => campaignState.selectCampaign(undefined)} onRemoveMember={campaignState.removeMember} onSignOut={onSignOut} onTutorial={() => setTutorialOpen(true)} />
       {tutorialOpen && <TutorialModal onClose={closeTutorial} />}
     </>
   );

@@ -226,6 +226,24 @@ button:disabled { opacity:.6;cursor:not-allowed; }
 .token-hidden-toggle.active { color:#8a6a2a;background:#f7edd6; }
 html[data-theme="dark"] .brush-size b { color:#c3b2f0; }
 html[data-theme="dark"] .token-hidden-toggle.active { color:#e6d3a2;background:#3a3020; }
+/* Sair da campanha, remover jogador e excluir campanha. */
+.campaign-card-wrap { position:relative; }
+.campaign-card-wrap .campaign-card { width:100%; }
+.campaign-card-action { position:absolute;z-index:2;right:10px;top:10px;width:28px;height:28px;display:grid;place-items:center;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--muted);opacity:0;transition:opacity .15s; }
+.campaign-card-wrap:hover .campaign-card-action,.campaign-card-action:focus-visible { opacity:1; }
+.campaign-card-action:hover { color:var(--forest-2);background:var(--sage); }
+.campaign-card-action.danger:hover { border-color:#e2b3b3;background:#fbeded;color:var(--red); }
+.participant-remove { width:26px;height:26px;display:grid;place-items:center;flex:none;margin-left:auto;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--muted); }
+.participant-remove:hover { border-color:#e2b3b3;background:#fbeded;color:var(--red); }
+.confirm-dialog p { color:var(--muted);font-size:11px;line-height:1.6; }
+.confirm-actions { display:flex;justify-content:flex-end;gap:9px;margin-top:18px; }
+.dialog-icon.danger { background:#fbeded;color:var(--red); }
+.danger-button { display:flex;align-items:center;gap:6px;padding:10px 15px;border:0;border-radius:8px;background:var(--red);color:#fff;font-size:11px;font-weight:700; }
+.danger-button:hover { background:#8f3b3b; }
+.danger-button:disabled,.primary-button:disabled { opacity:.6; }
+html[data-theme="dark"] .campaign-card-action { border-color:#453d51;background:#2a2434;color:#cfc6de; }
+html[data-theme="dark"] .campaign-card-action.danger:hover { border-color:#6b3f3f;background:#3a2626;color:#eba9a9; }
+html[data-theme="dark"] .participant-remove:hover { border-color:#6b3f3f;background:#3a2626;color:#eba9a9; }
 .install-state { display:flex;align-items:center;gap:9px;padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--forest-2); }
 .install-state strong { display:block;font-size:11px; }
 .install-state small { display:block;margin-top:2px;color:var(--muted);font-size:9px; }

@@ -106,6 +106,8 @@ export function useGameSession(campaignId: string, user: AppUser) {
   // capturado no fechamento do callback.
   const sceneRef = useRef(scene);
   sceneRef.current = scene;
+  const musicRef = useRef(music);
+  musicRef.current = music;
   const [syncError, setSyncError] = useState<string>();
   const online = isFirebaseConfigured && Boolean(db);
 
@@ -186,15 +188,20 @@ export function useGameSession(campaignId: string, user: AppUser) {
     );
     const unsubscribeMusic = onSnapshot(
       doc(db, "campaigns", campaignId, "music", "current"),
-      (snapshot) => setMusic(snapshot.exists() ? {
-        youtubeUrl: String(snapshot.data().youtubeUrl ?? ""),
-        title: String(snapshot.data().title ?? ""),
-        loop: Boolean(snapshot.data().loop),
-        playing: Boolean(snapshot.data().playing),
-        position: Number(snapshot.data().position ?? 0),
-        startedAt: snapshot.data().startedAt?.toMillis?.() ?? undefined,
-        updatedAt: snapshot.data().updatedAt?.toMillis?.() ?? undefined,
-      } : initialMusic),
+      (snapshot) => {
+        const value = snapshot.data({ serverTimestamps: "estimate" });
+        const next = snapshot.exists() ? {
+          youtubeUrl: String(value?.youtubeUrl ?? ""),
+          title: String(value?.title ?? ""),
+          loop: Boolean(value?.loop),
+          playing: Boolean(value?.playing),
+          position: Number(value?.position ?? 0),
+          startedAt: value?.startedAt?.toMillis?.() ?? undefined,
+          updatedAt: value?.updatedAt?.toMillis?.() ?? undefined,
+        } : initialMusic;
+        musicRef.current = next;
+        setMusic(next);
+      },
       () => setSyncError("A trilha da campanha não pôde ser sincronizada."),
     );
     const unsubscribeChat = onSnapshot(
@@ -437,14 +444,32 @@ export function useGameSession(campaignId: string, user: AppUser) {
   }, [campaignId, online]);
 
   const saveMusic = useCallback(async (next: CampaignMusic) => {
-    const saved = { ...next, position: Math.max(0, next.position || 0), updatedAt: Date.now() };
+    const current = musicRef.current;
+    const youtubeUrl = next.youtubeUrl.trim();
+    const trackChanged = youtubeUrl !== current.youtubeUrl;
+    const saved: CampaignMusic = {
+      ...current,
+      youtubeUrl,
+      title: next.title.trim(),
+      loop: next.loop,
+      ...(trackChanged ? { playing: false, position: 0, startedAt: undefined } : {}),
+      updatedAt: Date.now(),
+    };
+    musicRef.current = saved;
     setMusic(saved);
-    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "music", "current"), { ...saved, startedAt: saved.playing ? serverTimestamp() : null, updatedAt: serverTimestamp() });
+    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "music", "current"), {
+      youtubeUrl: saved.youtubeUrl,
+      title: saved.title,
+      loop: saved.loop,
+      ...(trackChanged ? { playing: false, position: 0, startedAt: null } : {}),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
   }, [campaignId, online]);
 
   const updateMusicPlayback = useCallback(async (playing: boolean, position: number) => {
     const safePosition = Math.max(0, position);
-    const next = { ...music, playing, position: safePosition, startedAt: playing ? Date.now() : undefined, updatedAt: Date.now() };
+    const next = { ...musicRef.current, playing, position: safePosition, startedAt: playing ? Date.now() : undefined, updatedAt: Date.now() };
+    musicRef.current = next;
     setMusic(next);
     if (online && db) await setDoc(doc(db, "campaigns", campaignId, "music", "current"), {
       playing,
@@ -452,7 +477,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
       startedAt: playing ? serverTimestamp() : null,
       updatedAt: serverTimestamp(),
     }, { merge: true });
-  }, [campaignId, music, online]);
+  }, [campaignId, online]);
 
   const clearChat = useCallback(async () => {
     setChatMessages([]);

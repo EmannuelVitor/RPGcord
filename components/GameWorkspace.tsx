@@ -49,7 +49,7 @@ import { useResizablePanels } from "@/hooks/useResizablePanels";
 import { characterNameOf, composeName, isOnline } from "@/lib/display-name";
 import type { AppUser, Campaign, CampaignMember } from "@/lib/types";
 
-type PanelKey = "sheet" | "history" | "chat" | "journal" | "notes" | "music" | "settings" | "gm";
+type PanelKey = "sheet" | "history" | "chat" | "journal" | "notes" | "settings" | "gm";
 type WhisperTabKey = `whisper:${string}`;
 type WorkspaceTabKey = PanelKey | WhisperTabKey;
 
@@ -67,7 +67,6 @@ const panelLabels: Record<PanelKey, string> = {
   chat: "Chat",
   journal: "Diário",
   notes: "Notas",
-  music: "Música",
   settings: "Configurações",
   gm: "Mestre",
 };
@@ -78,7 +77,6 @@ const panelIcons: Record<PanelKey, typeof ScrollText> = {
   chat: MessageCircle,
   journal: BookOpen,
   notes: NotebookPen,
-  music: Music2,
   settings: Settings,
   gm: Crown,
 };
@@ -121,6 +119,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
   const [activeTab, setActiveTab] = useState<WorkspaceTabKey>();
   const [panelPinned, setPanelPinned] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [musicOpen, setMusicOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [revealOpen, setRevealOpen] = useState(false);
@@ -146,6 +145,11 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
     setActiveTab(tab);
     setUnreadWhispers((current) => ({ ...current, [partnerId]: 0 }));
     knownWhisperPartnersRef.current.add(partnerId);
+    setSidebarOpen(false);
+  }, []);
+
+  const openMusic = useCallback(() => {
+    setMusicOpen(true);
     setSidebarOpen(false);
   }, []);
 
@@ -228,10 +232,11 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
     if (revealOpen) { setRevealOpen(false); return; }
     if (detailsOpen) { setDetailsOpen(false); return; }
     if (inviteOpen) { setInviteOpen(false); return; }
+    if (musicOpen) { setMusicOpen(false); return; }
     if (participantsOpen) { setParticipantsOpen(false); return; }
     if (sidebarOpen) { setSidebarOpen(false); return; }
     if (activeTab) closePanel(activeTab);
-  }, [activeTab, closePanel, detailsOpen, inviteOpen, participantsOpen, revealOpen, sidebarOpen]));
+  }, [activeTab, closePanel, detailsOpen, inviteOpen, musicOpen, participantsOpen, revealOpen, sidebarOpen]));
   const onlineCount = game.participants.filter((member) => isOnline(member)).length;
   const totalUnread = unreadChat + Object.values(unreadWhispers).reduce((total, count) => total + count, 0);
 
@@ -267,7 +272,6 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
     if (panel === "chat") return <SessionChat embedded campaignId={campaign.id} campaignName={campaign.name} user={user} messages={game.chatMessages} whispers={game.whisperMessages} participants={game.participants} tokens={game.tokens} isGM={game.isGM} onSend={game.sendChatMessage} onOpenWhisper={openWhisper} onClear={game.clearChat} onClose={() => closePanel("chat")} />;
     if (panel === "journal") return <CampaignJournal embedded journal={game.journal} isGM={game.isGM} onSave={game.saveJournal} onClose={() => closePanel("journal")} />;
     if (panel === "notes") return <PlayerNotes embedded notes={game.notes} participants={game.participants} userId={user.id} onSave={game.saveNotes} onClose={() => closePanel("notes")} />;
-    if (panel === "music") return <MusicPanel embedded music={game.music} isGM={game.isGM} onSave={game.saveMusic} onClose={() => closePanel("music")} />;
     if (panel === "settings") return <SettingsPanel embedded appearance={appearance} onClose={() => closePanel("settings")} />;
     if (panel === "gm" && game.isGM) return <GameMasterPanel embedded scene={game.scene} tokens={game.tokens} sheetTemplate={game.sheetTemplate} ownerId={user.id} onSaveScene={game.saveScene} onSaveSheetTemplate={game.saveSheetTemplate} onAddToken={game.addToken} onRemoveToken={game.removeToken} onSetTokenHidden={game.setTokenHidden} onClose={() => closePanel("gm")} />;
     return null;
@@ -286,7 +290,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
           <button onClick={() => openPanel("journal")}><BookOpen /> Diário da campanha</button>
           <button disabled={!game.hasCharacter} onClick={() => openPanel("notes")}><NotebookPen /> Notas da personagem</button>
           <button onClick={() => openPanel("chat")}><MessageCircle /> Chat da sessão {totalUnread > 0 ? <span>{totalUnread}</span> : null}</button>
-          <button onClick={() => openPanel("music")}><Music2 /> Música da campanha</button>
+          <button onClick={openMusic}><Music2 /> Música da campanha</button>
           {game.isGM ? <><p className="nav-group">Mestre</p><button onClick={() => openPanel("gm")}><Crown /> Preparar cena</button><button onClick={() => { setInviteOpen(true); setSidebarOpen(false); }}><UserPlus /> Convidar jogadores</button></> : null}
         </nav>
         <div className="sidebar-bottom">
@@ -354,8 +358,9 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
       </div> : null}
 
       {inviteOpen && game.isGM ? <InviteDialog campaign={campaign} onClose={() => setInviteOpen(false)} /> : null}
+      {musicOpen ? <MusicPanel music={game.music} isGM={game.isGM} onSave={game.saveMusic} onClose={() => setMusicOpen(false)} /> : null}
       {detailsOpen ? <CampaignDetailsDialog campaign={campaign} isGM={game.isGM} onClose={() => setDetailsOpen(false)} onLeave={() => onLeaveCampaign(campaign.id)} onDelete={() => onDeleteCampaign(campaign.id)} /> : null}
-      <MusicPlayer music={game.music} isGM={game.isGM} onPlayback={game.updateMusicPlayback} onOpen={() => openPanel("music")} />
+      <MusicPlayer music={game.music} isGM={game.isGM} onPlayback={game.updateMusicPlayback} onOpen={openMusic} />
       {revealOpen && game.scene.revealUrl ? <div className="reveal-backdrop" role="dialog" aria-modal="true" aria-label="Imagem revelada pelo mestre" onClick={() => setRevealOpen(false)}><button><X /></button><img src={game.scene.revealUrl} alt="Imagem revelada pelo mestre" /></div> : null}
     </main>
   );

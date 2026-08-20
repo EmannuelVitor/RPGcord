@@ -3,6 +3,7 @@
 import { LockKeyhole, Music2, Pause, Play, Volume2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { CampaignMusic } from "@/lib/types";
+import { musicDrift, synchronizedMusicPosition } from "@/lib/music-sync";
 import { parseYouTubeUrl } from "@/lib/youtube";
 
 type YTPlayer = {
@@ -76,11 +77,6 @@ function formatTime(value: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function synchronizedPosition(value: CampaignMusic, now = Date.now()) {
-  if (!value.playing || !value.startedAt) return value.position;
-  return value.position + Math.max(0, now - value.startedAt) / 1000;
-}
-
 export function MusicPlayer({ music, isGM, onPlayback, onOpen }: Props) {
   const [ready, setReady] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(false);
@@ -109,9 +105,9 @@ export function MusicPlayer({ music, isGM, onPlayback, onOpen }: Props) {
     const api = apiRef.current;
     if (!player || !api || !audioEnabledRef.current) return;
     const shared = musicRef.current;
-    const nextPosition = synchronizedPosition(shared);
+    const nextPosition = synchronizedMusicPosition(shared);
     const current = player.getCurrentTime() || 0;
-    const drift = Math.abs(current - nextPosition);
+    const drift = musicDrift(current, shared);
     if ((forceSeek && drift > 2) || (!forceSeek && drift > 5)) player.seekTo(nextPosition, true);
     player.setVolume(volumeRef.current);
     const state = player.getPlayerState();
@@ -188,7 +184,7 @@ export function MusicPlayer({ music, isGM, onPlayback, onOpen }: Props) {
   }, [music.loop, music.youtubeUrl]);
 
   useEffect(() => {
-    setPosition(synchronizedPosition(music));
+    setPosition(synchronizedMusicPosition(music));
     applySharedPlayback(true);
     // Reage somente ao relógio compartilhado pelo mestre.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -205,7 +201,7 @@ export function MusicPlayer({ music, isGM, onPlayback, onOpen }: Props) {
       if (!audioEnabledRef.current) return;
       const shared = musicRef.current;
       const state = player.getPlayerState();
-      if (shared.playing && (Math.abs(current - synchronizedPosition(shared)) > 5 || (state !== api.PlayerState.PLAYING && state !== api.PlayerState.BUFFERING))) applySharedPlayback(false);
+      if (shared.playing && (musicDrift(current, shared) > 5 || (state !== api.PlayerState.PLAYING && state !== api.PlayerState.BUFFERING))) applySharedPlayback(false);
       if (!shared.playing && (state === api.PlayerState.PLAYING || state === api.PlayerState.BUFFERING)) applySharedPlayback(false);
     }, 900);
     return () => window.clearInterval(timer);
@@ -215,7 +211,7 @@ export function MusicPlayer({ music, isGM, onPlayback, onOpen }: Props) {
   async function togglePlayback() {
     const player = playerRef.current;
     if (!player || !isGM) return;
-    const current = player.getCurrentTime() || synchronizedPosition(musicRef.current);
+    const current = player.getCurrentTime() || synchronizedMusicPosition(musicRef.current);
     await onPlayback(!musicRef.current.playing, current);
   }
 

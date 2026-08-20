@@ -45,6 +45,7 @@ import { MusicPlayer } from "@/components/MusicPlayer";
 import { ParticipantsPopover } from "@/components/ParticipantsPopover";
 import { PlayerNotes } from "@/components/PlayerNotes";
 import { SessionChat } from "@/components/SessionChat";
+import { SectionErrorBoundary } from "@/components/SectionErrorBoundary";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { useGameSession } from "@/hooks/useGameSession";
 import { useResizablePanels } from "@/hooks/useResizablePanels";
@@ -330,8 +331,8 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
         ) : null}
 
         <div className="content-grid">
-          <Battlemap scene={game.scene} tokens={game.tokens} participants={game.participants} userId={user.id} isGM={game.isGM} hasCharacter={game.hasCharacter || game.isGM} onMove={game.moveToken} onToggleTokenLock={game.toggleTokenLock} onRequestCharacter={() => openPanel("sheet")} onClearRevealed={game.clearRevealed} onCommitRevealed={game.commitRevealed} onMoveLight={game.moveLight} onCreateLight={game.createLight} onUpdateLight={game.updateLight} onDeleteLight={game.deleteLight} onSetGlobalVision={game.setGlobalVision} onSetTokenVision={game.setTokenVision} />
-          <DiceRoller rolls={game.rolls} tokens={game.tokens} character={game.character} template={game.sheetTemplate} hasCharacter={game.hasCharacter} playerName={user.name} onOpenSheet={() => openPanel("sheet")} onRoll={game.rollDie} />
+          <SectionErrorBoundary title="O mapa não pôde ser exibido"><Battlemap scene={game.scene} tokens={game.tokens} participants={game.participants} userId={user.id} isGM={game.isGM} hasCharacter={game.hasCharacter || game.isGM} onMove={game.moveToken} onToggleTokenLock={game.toggleTokenLock} onRequestCharacter={() => openPanel("sheet")} onClearRevealed={game.clearRevealed} onCommitRevealed={game.commitRevealed} onMoveLight={game.moveLight} onCreateLight={game.createLight} onUpdateLight={game.updateLight} onDeleteLight={game.deleteLight} onSetGlobalVision={game.setGlobalVision} onSetTokenVision={game.setTokenVision} /></SectionErrorBoundary>
+          <SectionErrorBoundary title="O oráculo de dados não pôde ser exibido"><DiceRoller rolls={game.rolls} tokens={game.tokens} character={game.character} template={game.sheetTemplate} hasCharacter={game.hasCharacter} playerName={user.name} onOpenSheet={() => openPanel("sheet")} onRoll={game.rollDie} /></SectionErrorBoundary>
         </div>
 
       </div>
@@ -359,14 +360,14 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
             })}</div>
             <button className={panelPinned ? "active" : ""} onClick={() => setPanelPinned((value) => !value)} title={panelPinned ? "Desafixar painel" : "Fixar painel"}>{panelPinned ? <PinOff size={16} /> : <Pin size={16} />}</button>
           </header>
-          <div className="workspace-tab-content">{renderPanel(activeTab)}</div>
+          <div className="workspace-tab-content"><SectionErrorBoundary title="Este painel não pôde ser exibido">{renderPanel(activeTab)}</SectionErrorBoundary></div>
         </aside>
       </div> : null}
 
       {inviteOpen && game.isGM ? <InviteDialog campaign={campaign} onClose={() => setInviteOpen(false)} /> : null}
       {musicOpen ? <MusicPanel music={game.music} isGM={game.isGM} onSave={game.saveMusic} onClose={() => setMusicOpen(false)} /> : null}
       {detailsOpen ? <CampaignDetailsDialog campaign={campaign} isGM={game.isGM} onClose={() => setDetailsOpen(false)} onLeave={async () => { await game.assignCharacter(user.id, undefined); await onLeaveCampaign(campaign.id); }} onDelete={() => onDeleteCampaign(campaign.id)} /> : null}
-      <MusicPlayer music={game.music} isGM={game.isGM} onPlayback={game.updateMusicPlayback} onOpen={openMusic} />
+      <SectionErrorBoundary title="O player de música não pôde ser exibido"><MusicPlayer music={game.music} isGM={game.isGM} onPlayback={game.updateMusicPlayback} onOpen={openMusic} /></SectionErrorBoundary>
       {revealOpen && game.scene.revealUrl ? <div className="reveal-backdrop" role="dialog" aria-modal="true" aria-label="Imagem revelada pelo mestre" onClick={() => setRevealOpen(false)}><button><X /></button><img src={game.scene.revealUrl} alt="Imagem revelada pelo mestre" /></div> : null}
     </main>
   );

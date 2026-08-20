@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight, Dices, Plus, RotateCcw, Swords, Trash2, X } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import type { InitiativeEntry, InitiativeState, MapToken } from "@/lib/types";
+import { advanceInitiative, orderInitiative } from "@/lib/initiative";
 
 type Props = {
   initiative: InitiativeState;
@@ -12,10 +13,6 @@ type Props = {
   onSave: (initiative: InitiativeState) => Promise<void>;
   onClose: () => void;
 };
-
-function ordered(entries: InitiativeEntry[]) {
-  return [...entries].sort((a, b) => b.initiative - a.initiative || a.name.localeCompare(b.name, "pt-BR"));
-}
 
 export function InitiativeTracker({ initiative, tokens, isGM, embedded = false, onSave, onClose }: Props) {
   const [selectedTokenId, setSelectedTokenId] = useState("");
@@ -45,7 +42,7 @@ export function InitiativeTracker({ initiative, tokens, isGM, embedded = false, 
     if (!name) { setError("Escolha um pino ou informe um nome."); return; }
     const entry: InitiativeEntry = { id: crypto.randomUUID(), ...(token ? { tokenId: token.id } : {}), name, initiative: Math.round(score) };
     const activeId = initiative.entries[initiative.activeIndex]?.id;
-    const entries = ordered([...initiative.entries, entry]);
+    const entries = orderInitiative([...initiative.entries, entry]);
     void commit({ ...initiative, entries, activeIndex: initiative.running && activeId ? entries.findIndex((item) => item.id === activeId) : -1 });
     setSelectedTokenId("");
     setCustomName("");
@@ -53,26 +50,21 @@ export function InitiativeTracker({ initiative, tokens, isGM, embedded = false, 
 
   function rollAll() {
     const entries = tokens.map((token) => ({ id: crypto.randomUUID(), tokenId: token.id, name: token.name, initiative: Math.floor(Math.random() * 20) + 1 }));
-    void commit({ entries: ordered(entries), activeIndex: entries.length ? 0 : -1, round: entries.length ? 1 : 0, running: entries.length > 0 });
+    void commit({ entries: orderInitiative(entries), activeIndex: entries.length ? 0 : -1, round: entries.length ? 1 : 0, running: entries.length > 0 });
   }
 
   function start() {
-    const entries = ordered(initiative.entries);
+    const entries = orderInitiative(initiative.entries);
     void commit({ ...initiative, entries, activeIndex: entries.length ? 0 : -1, round: entries.length ? 1 : 0, running: entries.length > 0 });
   }
 
   function advance(direction: 1 | -1) {
-    if (!initiative.entries.length) return;
-    let activeIndex = initiative.activeIndex + direction;
-    let round = initiative.round;
-    if (activeIndex >= initiative.entries.length) { activeIndex = 0; round += 1; }
-    if (activeIndex < 0) { activeIndex = initiative.entries.length - 1; round = Math.max(1, round - 1); }
-    void commit({ ...initiative, activeIndex, round, running: true });
+    void commit(advanceInitiative(initiative, direction));
   }
 
   function updateEntry(entryId: string, patch: Partial<InitiativeEntry>) {
     const activeId = initiative.entries[initiative.activeIndex]?.id;
-    const entries = ordered(initiative.entries.map((entry) => entry.id === entryId ? { ...entry, ...patch } : entry));
+    const entries = orderInitiative(initiative.entries.map((entry) => entry.id === entryId ? { ...entry, ...patch } : entry));
     void commit({ ...initiative, entries, activeIndex: activeId ? entries.findIndex((entry) => entry.id === activeId) : -1 });
   }
 

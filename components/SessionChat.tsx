@@ -3,6 +3,7 @@
 import { AtSign, Check, EyeOff, ImagePlus, LoaderCircle, LockKeyhole, MessageCircle, Pencil, Send, Trash2, Undo2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { auth } from "@/lib/firebase";
+import { currentMentionQuery, insertMention as insertMentionText, splitMentionText } from "@/lib/chat-mentions";
 import { characterNameOf, composeName } from "@/lib/display-name";
 import type { AppUser, CampaignMember, ChatMessage, MapToken } from "@/lib/types";
 
@@ -106,10 +107,10 @@ export function SessionChat({
   const activeRecipientId = privateWith?.userId ?? recipientId;
   const conversationId = activeRecipientId ? [user.id, activeRecipientId].sort().join("__") : "general";
   const typingMembers = participants.filter((member) => member.userId !== user.id && member.typingConversationId === conversationId && Boolean(member.typingAt && typingClock - member.typingAt < 5000));
-  const mentionMatch = text.match(/(?:^|\s)@([^\s@]*)$/u);
-  const mentionSuggestions = mentionMatch ? participants
+  const mentionQuery = currentMentionQuery(text);
+  const mentionSuggestions = mentionQuery !== undefined ? participants
     .filter((member) => member.userId !== user.id)
-    .filter((member) => nameOf(member.userId, member.name).toLocaleLowerCase("pt-BR").includes(mentionMatch[1].toLocaleLowerCase("pt-BR")))
+    .filter((member) => nameOf(member.userId, member.name).toLocaleLowerCase("pt-BR").includes(mentionQuery.toLocaleLowerCase("pt-BR")))
     .slice(0, 5) : [];
 
   function notifyTyping(nextText: string) {
@@ -132,7 +133,7 @@ export function SessionChat({
 
   function insertMention(member: CampaignMember) {
     const label = nameOf(member.userId, member.name);
-    setText((current) => current.replace(/@[^\s@]*$/u, `@${label} `));
+    setText((current) => insertMentionText(current, label));
     setMentionIds((current) => new Set(current).add(member.userId));
   }
 
@@ -140,12 +141,8 @@ export function SessionChat({
     const names = (message.mentionIds ?? []).map((id) => {
       const member = participants.find((item) => item.userId === id);
       return member ? nameOf(member.userId, member.name) : undefined;
-    }).filter((name): name is string => Boolean(name)).sort((a, b) => b.length - a.length);
-    if (!names.length) return message.text;
-    const escaped = names.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-    const matcher = new RegExp(`(@(?:${escaped.join("|")}))`, "giu");
-    const normalized = new Set(names.map((name) => `@${name}`.toLocaleLowerCase("pt-BR")));
-    return message.text.split(matcher).map((part, index) => normalized.has(part.toLocaleLowerCase("pt-BR")) ? <mark className="chat-mention" key={`${part}-${index}`}>{part}</mark> : part);
+    }).filter((name): name is string => Boolean(name));
+    return splitMentionText(message.text, names).map((part, index) => part.mention ? <mark className="chat-mention" key={`${part.text}-${index}`}>{part.text}</mark> : part.text);
   }
 
   async function submit(event: FormEvent) {

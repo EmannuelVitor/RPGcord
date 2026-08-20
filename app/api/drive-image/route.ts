@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { downloadPrivateDriveImage } from "@/lib/google-drive";
+import { clientKey, rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 const DRIVE_FILE_ID = /^[a-zA-Z0-9_-]{10,}$/;
 
 export async function GET(request: Request) {
+  const limit = rateLimit(clientKey(request, "drive-image"), 120, 60_000);
+  if (!limit.ok) return tooManyRequests(limit.retryAfter);
+
   const fileId = new URL(request.url).searchParams.get("id") ?? "";
   if (!DRIVE_FILE_ID.test(fileId)) {
     return NextResponse.json({ error: "ID do Google Drive inválido." }, { status: 400 });

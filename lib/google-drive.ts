@@ -4,7 +4,13 @@ import { createSign } from "node:crypto";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
-const DEFAULT_CHAT_FOLDER_ID = "1zSNDvRqTbC6ymeTe9Do9cJhqOj5E_Zxh";
+
+/** A pasta de destino vem do ambiente: um ID fixo no repositorio vaza infraestrutura. */
+function chatFolderId() {
+  const folderId = process.env.GOOGLE_DRIVE_CHAT_FOLDER_ID?.trim();
+  if (!folderId) throw new Error("A pasta do Google Drive para imagens do chat nao foi configurada (GOOGLE_DRIVE_CHAT_FOLDER_ID).");
+  return folderId;
+}
 
 let cachedToken: { value: string; expiresAt: number } | undefined;
 
@@ -67,7 +73,7 @@ async function getDriveAccessToken() {
 
 export async function uploadChatImage(file: File, fileName: string) {
   const accessToken = await getDriveAccessToken();
-  const folderId = process.env.GOOGLE_DRIVE_CHAT_FOLDER_ID || DEFAULT_CHAT_FOLDER_ID;
+  const folderId = chatFolderId();
   const boundary = `rpgcord_${crypto.randomUUID().replace(/-/g, "")}`;
   const metadata = JSON.stringify({ name: fileName, parents: [folderId] });
   const opening = Buffer.from(
@@ -93,7 +99,7 @@ export async function uploadChatImage(file: File, fileName: string) {
 
 export async function downloadPrivateDriveImage(fileId: string) {
   const accessToken = await getDriveAccessToken();
-  const folderId = process.env.GOOGLE_DRIVE_CHAT_FOLDER_ID || DEFAULT_CHAT_FOLDER_ID;
+  const folderId = chatFolderId();
   const metadataResponse = await fetch(
     `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=parents,mimeType&supportsAllDrives=true`,
     { headers: { Authorization: `Bearer ${accessToken}` }, cache: "force-cache" },

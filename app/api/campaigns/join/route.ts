@@ -1,8 +1,12 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 import { getAdminAuth, getAdminFirestore } from "@/lib/firebase-admin";
+import { clientKey, rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
+  const limit = rateLimit(clientKey(request, "campaign-join"), 10, 60_000);
+  if (!limit.ok) return tooManyRequests(limit.retryAfter);
+
   try {
     const authorization = request.headers.get("authorization");
     const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : undefined;

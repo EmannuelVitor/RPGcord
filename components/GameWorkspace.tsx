@@ -35,6 +35,7 @@ import { DiceHistoryPanel } from "@/components/DiceHistoryPanel";
 import { DiceRoller } from "@/components/DiceRoller";
 import { GameMasterPanel } from "@/components/GameMasterPanel";
 import { InviteDialog } from "@/components/InviteDialog";
+import { MusicPanel } from "@/components/MusicPanel";
 import { MusicPlayer } from "@/components/MusicPlayer";
 import { ParticipantsPopover } from "@/components/ParticipantsPopover";
 import { PlayerNotes } from "@/components/PlayerNotes";
@@ -44,7 +45,7 @@ import { useGameSession } from "@/hooks/useGameSession";
 import { characterNameOf, composeName } from "@/lib/display-name";
 import type { AppUser, Campaign, CampaignMember } from "@/lib/types";
 
-type PanelKey = "sheet" | "history" | "chat" | "journal" | "notes" | "settings" | "gm";
+type PanelKey = "sheet" | "history" | "chat" | "journal" | "notes" | "music" | "settings" | "gm";
 type WhisperTabKey = `whisper:${string}`;
 type WorkspaceTabKey = PanelKey | WhisperTabKey;
 
@@ -62,6 +63,7 @@ const panelLabels: Record<PanelKey, string> = {
   chat: "Chat",
   journal: "Diário",
   notes: "Notas",
+  music: "Música",
   settings: "Configurações",
   gm: "Mestre",
 };
@@ -72,6 +74,7 @@ const panelIcons: Record<PanelKey, typeof ScrollText> = {
   chat: MessageCircle,
   journal: BookOpen,
   notes: NotebookPen,
+  music: Music2,
   settings: Settings,
   gm: Crown,
 };
@@ -113,7 +116,6 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [revealOpen, setRevealOpen] = useState(false);
-  const [musicOpen, setMusicOpen] = useState(false);
   const [participantsOpen, setParticipantsOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [unreadChat, setUnreadChat] = useState(0);
@@ -222,8 +224,6 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
     }
   }, [activeTab, game.whisperMessages, user.id]);
 
-  const characterName = game.character.name.trim() || "Crie sua personagem";
-  const hpPercent = game.character.maxHp > 0 ? Math.max(0, Math.min(100, Math.round((game.character.hp / game.character.maxHp) * 100))) : 0;
   const panelOpen = Boolean(activeTab && openTabs.includes(activeTab));
   const onlineCount = game.participants.filter((member) => member.lastSeenAt && Date.now() - member.lastSeenAt < 100000).length;
   const totalUnread = unreadChat + Object.values(unreadWhispers).reduce((total, count) => total + count, 0);
@@ -260,6 +260,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
     if (panel === "chat") return <SessionChat embedded campaignId={campaign.id} campaignName={campaign.name} user={user} messages={game.chatMessages} whispers={game.whisperMessages} participants={game.participants} tokens={game.tokens} isGM={game.isGM} onSend={game.sendChatMessage} onOpenWhisper={openWhisper} onClear={game.clearChat} onClose={() => closePanel("chat")} />;
     if (panel === "journal") return <CampaignJournal embedded journal={game.journal} isGM={game.isGM} onSave={game.saveJournal} onClose={() => closePanel("journal")} />;
     if (panel === "notes") return <PlayerNotes embedded notes={game.notes} participants={game.participants} userId={user.id} onSave={game.saveNotes} onClose={() => closePanel("notes")} />;
+    if (panel === "music") return <MusicPanel embedded music={game.music} isGM={game.isGM} onSave={game.saveMusic} onClose={() => closePanel("music")} />;
     if (panel === "settings") return <SettingsPanel embedded theme={theme} onTheme={setTheme} onClose={() => closePanel("settings")} />;
     if (panel === "gm" && game.isGM) return <GameMasterPanel embedded scene={game.scene} tokens={game.tokens} sheetTemplate={game.sheetTemplate} ownerId={user.id} onSaveScene={game.saveScene} onSaveSheetTemplate={game.saveSheetTemplate} onAddToken={game.addToken} onRemoveToken={game.removeToken} onClose={() => closePanel("gm")} />;
     return null;
@@ -274,13 +275,11 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
         <button className="sidebar-close" onClick={() => setSidebarOpen(false)}><X size={18} /></button>
         <nav>
           <p>Jornada</p>
-          <button className="active" onClick={() => setSidebarOpen(false)}><MapIcon /> Mapa da mesa <span>AO VIVO</span></button>
           <button onClick={() => openPanel("sheet")}><ScrollText /> {game.hasCharacter ? "Minha ficha" : "Criar ficha"}</button>
-          <button onClick={() => openPanel("history")}><Dices /> Histórico de dados</button>
-          <button onClick={() => openPanel("chat")}><MessageCircle /> Chat da sessão {totalUnread > 0 ? <span>{totalUnread}</span> : null}</button>
           <button onClick={() => openPanel("journal")}><BookOpen /> Diário da campanha</button>
           <button disabled={!game.hasCharacter} onClick={() => openPanel("notes")}><NotebookPen /> Notas da personagem</button>
-          <button onClick={() => { setMusicOpen(true); setSidebarOpen(false); }}><Music2 /> Música da campanha</button>
+          <button onClick={() => openPanel("chat")}><MessageCircle /> Chat da sessão {totalUnread > 0 ? <span>{totalUnread}</span> : null}</button>
+          <button onClick={() => openPanel("music")}><Music2 /> Música da campanha</button>
           {game.isGM ? <><p className="nav-group">Mestre</p><button onClick={() => openPanel("gm")}><Crown /> Preparar cena</button><button onClick={() => { setInviteOpen(true); setSidebarOpen(false); }}><UserPlus /> Convidar jogadores</button></> : null}
         </nav>
         <div className="sidebar-bottom">
@@ -300,7 +299,8 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
             <span className="online"><Wifi size={14} /> Mesa sincronizada</span>
             <button className="party-stack party-button" onClick={() => setParticipantsOpen((value) => !value)} title="Ver jogadores"><i><Users size={12} /></i><i>{onlineCount}/{Math.max(campaign.memberIds.length, game.participants.length)}</i></button>
             <button className="outline-button chat-top" onClick={() => openPanel("chat")}><MessageCircle size={16} /> Chat {totalUnread > 0 ? <b>{totalUnread}</b> : null}</button>
-            <button className="outline-button music-top" onClick={() => setMusicOpen(true)}><Music2 size={16} /> Música</button>
+            <button className="outline-button music-top" onClick={() => openPanel("music")}><Music2 size={16} /> Música</button>
+            {game.scene.revealUrl ? <button className="outline-button reveal-top" onClick={() => setRevealOpen(true)} title="Ver a imagem revelada pelo mestre"><Sparkles size={16} /> Revelação</button> : null}
             {game.isGM ? <button className="outline-button invite-top" onClick={() => setInviteOpen(true)}><UserPlus size={16} /> Convidar</button> : null}
             <button className="outline-button" onClick={() => openPanel("sheet")}><ScrollText size={16} /> {game.hasCharacter ? "Abrir ficha" : "Criar ficha"}</button>
           </div>
@@ -315,19 +315,9 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
 
         <div className="content-grid">
           <Battlemap scene={game.scene} tokens={game.tokens} participants={game.participants} userId={user.id} isGM={game.isGM} hasCharacter={game.hasCharacter} onMove={game.moveToken} onToggleTokenLock={game.toggleTokenLock} onRequestCharacter={() => openPanel("sheet")} onRevealArea={game.revealArea} onClearRevealed={game.clearRevealed} onMoveLight={game.moveLight} onCreateLight={game.createLight} onUpdateLight={game.updateLight} onDeleteLight={game.deleteLight} onSetGlobalVision={game.setGlobalVision} onSetTokenVision={game.setTokenVision} />
-          <DiceRoller rolls={game.rolls} tokens={game.tokens} onRoll={game.rollDie} />
+          <DiceRoller rolls={game.rolls} tokens={game.tokens} character={game.character} template={game.sheetTemplate} hasCharacter={game.hasCharacter} playerName={user.name} onOpenSheet={() => openPanel("sheet")} onRoll={game.rollDie} />
         </div>
 
-        <section className="bottom-strip">
-          <div className="quest-card"><span><BookOpen size={18} /></span><div><p className="eyebrow">Campanha atual</p><strong>{campaign.description || "A história será escrita pelo seu grupo."}</strong></div><small>{game.isGM ? "MESTRE" : "JOGADOR"}</small></div>
-          <div className="character-summary">
-            <div className="portrait">{game.character.imageUrl ? <img src={game.character.imageUrl} alt="" /> : characterName.split(" ").map((part) => part[0]).join("").slice(0, 2)}</div>
-            <div><p className="eyebrow">Seu personagem</p><strong>{characterName}{game.hasCharacter ? <em className="character-player-tag">({user.name})</em> : null}</strong><span>{game.hasCharacter ? `${game.character.ancestry || "Sem ancestralidade"} · ${game.character.characterClass || "Sem classe"} ${game.character.level}` : "Crie a ficha para gerar seu pino no mapa"}</span></div>
-            {game.hasCharacter ? <div className="hp"><span><i style={{ width: `${hpPercent}%` }} /></span><strong>{game.character.hp}/{game.character.maxHp} PV</strong></div> : null}
-            <button className="text-button" onClick={() => openPanel("sheet")}>{game.hasCharacter ? "Ver ficha" : "Criar ficha"} →</button>
-          </div>
-          {game.scene.revealUrl ? <button className="reveal-card" onClick={() => setRevealOpen(true)}><Sparkles size={17} /><span><small>O mestre revelou</small><strong>Ver imagem</strong></span></button> : null}
-        </section>
       </div>
 
       <button className={`chat-floating-button ${totalUnread ? "has-unread" : ""}`} onClick={() => openPanel("chat")} aria-label="Abrir chat da sessão"><MessageCircle />{totalUnread > 0 ? <span>{totalUnread > 99 ? "99+" : totalUnread}</span> : null}</button>
@@ -357,7 +347,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
       </div> : null}
 
       {inviteOpen && game.isGM ? <InviteDialog campaign={campaign} onClose={() => setInviteOpen(false)} /> : null}
-      <MusicPlayer open={musicOpen} music={game.music} isGM={game.isGM} onSave={game.saveMusic} onPlayback={game.updateMusicPlayback} onOpen={() => setMusicOpen(true)} onClose={() => setMusicOpen(false)} />
+      <MusicPlayer music={game.music} isGM={game.isGM} onPlayback={game.updateMusicPlayback} onOpen={() => openPanel("music")} />
       {revealOpen && game.scene.revealUrl ? <div className="reveal-backdrop" onClick={() => setRevealOpen(false)}><button><X /></button><img src={game.scene.revealUrl} alt="Imagem revelada pelo mestre" /></div> : null}
     </main>
   );

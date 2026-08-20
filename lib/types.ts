@@ -101,6 +101,8 @@ export type MapToken = {
   visionRadius?: number;
   locked?: boolean;
   lockedBy?: string;
+  /** Criatura visivel apenas para o mestre. */
+  hidden?: boolean;
   kind: "hero" | "monster";
 };
 

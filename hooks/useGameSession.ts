@@ -61,15 +61,18 @@ const MAX_REVEALED_AREAS = 240;
 
 /**
  * Descarta revelacoes praticamente sobrepostas antes de aplicar o teto. Pintar
- * a nevoa com cliques repetidos gerava dezenas de circulos no mesmo ponto, e o
- * corte cego em 60 apagava areas antigas sem o mestre perceber.
+ * a nevoa por arraste gera muitos circulos proximos, e um corte cego apagaria
+ * areas antigas sem o mestre perceber.
  */
-function mergeRevealed(areas: FogArea[], next: FogArea) {
-  const kept = areas.filter((area) => {
-    const distance = Math.hypot(area.x - next.x, area.y - next.y);
-    return distance > Math.min(area.radius, next.radius) * .45 || area.radius > next.radius;
-  });
-  return [...kept, next].slice(-MAX_REVEALED_AREAS);
+function dedupeRevealed(areas: FogArea[]) {
+  const kept: FogArea[] = [];
+  for (const area of areas) {
+    const covered = kept.some((other) =>
+      other.radius >= area.radius &&
+      Math.hypot(other.x - area.x, other.y - area.y) < Math.min(other.radius, area.radius) * .45);
+    if (!covered) kept.push(area);
+  }
+  return kept.slice(-MAX_REVEALED_AREAS);
 }
 
 const initialJournal: CampaignJournal = { content: "" };
@@ -325,6 +328,11 @@ export function useGameSession(campaignId: string, user: AppUser) {
     if (online && db) await setDoc(doc(db, "campaigns", campaignId, "tokens", token.id), token);
   }, [campaignId, online]);
 
+  const setTokenHidden = useCallback(async (tokenId: string, hidden: boolean) => {
+    setTokens((current) => current.map((token) => token.id === tokenId ? { ...token, hidden } : token));
+    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "tokens", tokenId), { hidden }, { merge: true });
+  }, [campaignId, online]);
+
   const removeToken = useCallback(async (tokenId: string) => {
     setTokens((current) => current.filter((token) => token.id !== tokenId));
     if (online && db) await deleteDoc(doc(db, "campaigns", campaignId, "tokens", tokenId));
@@ -344,14 +352,16 @@ export function useGameSession(campaignId: string, user: AppUser) {
     if (online && db) await setDoc(doc(db, "campaigns", campaignId, "scenes", "active"), patch, { merge: true });
   }, [campaignId, online]);
 
-  const revealArea = useCallback(async (x: number, y: number) => {
-    const current = sceneRef.current;
-    const area: FogArea = { id: crypto.randomUUID(), x, y, radius: current.visionRadius ?? 14 };
-    await patchScene({ revealedAreas: mergeRevealed(current.revealedAreas ?? [], area) });
-  }, [patchScene]);
-
   const clearRevealed = useCallback(async () => {
     await patchScene({ revealedAreas: [] });
+  }, [patchScene]);
+
+  /**
+   * Grava o traco inteiro do pincel de nevoa de uma vez. Pintar por arraste
+   * emitindo uma escrita por circulo geraria dezenas de gravacoes por gesto.
+   */
+  const commitRevealed = useCallback(async (areas: FogArea[]) => {
+    await patchScene({ revealedAreas: dedupeRevealed(areas) });
   }, [patchScene]);
 
   const moveLight = useCallback(async (lightId: string, x: number, y: number) => {
@@ -463,6 +473,6 @@ export function useGameSession(campaignId: string, user: AppUser) {
 
   return useMemo(() => ({
     character, hasCharacter, rolls, tokens, scene, journal, music, sheetTemplate, chatMessages, whisperMessages, notes, participants, isGM: gmId === user.id, online, syncError,
-    saveCharacter, rollDie, moveToken, toggleTokenLock, addToken, removeToken, saveScene, revealArea, clearRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveMusic, updateMusicPlayback,
-  }), [addToken, character, chatMessages, clearChat, clearRevealed, createLight, deleteLight, gmId, hasCharacter, journal, moveLight, moveToken, music, notes, online, participants, removeToken, revealArea, rollDie, rolls, saveCharacter, saveJournal, saveMusic, saveNotes, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, sheetTemplate, syncError, toggleTokenLock, tokens, updateLight, updateMusicPlayback, user.id, whisperMessages]);
+    saveCharacter, rollDie, moveToken, toggleTokenLock, addToken, removeToken, setTokenHidden, saveScene, clearRevealed, commitRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveMusic, updateMusicPlayback,
+  }), [addToken, character, chatMessages, clearChat, clearRevealed, commitRevealed, setTokenHidden, createLight, deleteLight, gmId, hasCharacter, journal, moveLight, moveToken, music, notes, online, participants, removeToken, rollDie, rolls, saveCharacter, saveJournal, saveMusic, saveNotes, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, sheetTemplate, syncError, toggleTokenLock, tokens, updateLight, updateMusicPlayback, user.id, whisperMessages]);
 }

@@ -215,6 +215,17 @@ button:disabled { opacity:.6;cursor:not-allowed; }
 .map-light-marker { position:absolute;z-index:11;width:30px;height:30px;display:grid;place-items:center;transform:translate(-50%,-50%);border:2px solid #fff;border-radius:50%;background:var(--light-color);color:#493915;box-shadow:0 0 0 3px rgba(255,220,130,.32),0 0 22px var(--light-color);touch-action:none;user-select:none; }
 /* Seletor de exibicao de nomes nos pinos, junto dos controles de zoom. */
 /* Resumo do personagem, no topo do oraculo de rolagem. */
+/* Pincel de nevoa e criaturas ocultas. */
+.map-tools button.hide-active { background:#3c3350;color:#e7dcff;box-shadow:inset 0 0 0 1px #574a72; }
+.brush-size { display:flex;align-items:center;gap:5px;padding:0 6px; }
+.brush-size input[type="range"] { width:66px;padding:0;accent-color:var(--forest-2); }
+.brush-size b { min-width:16px;color:var(--forest-2);font-size:8px;text-align:right; }
+.battle-map.reveal-mode { cursor:crosshair;touch-action:none; }
+.map-token.hidden-token { opacity:.5;border-style:dashed;filter:saturate(.6); }
+.map-token.hidden-token::before { content:"";position:absolute;inset:-6px;border:1px dashed rgba(255,255,255,.6);border-radius:50%; }
+.token-hidden-toggle.active { color:#8a6a2a;background:#f7edd6; }
+html[data-theme="dark"] .brush-size b { color:#c3b2f0; }
+html[data-theme="dark"] .token-hidden-toggle.active { color:#e6d3a2;background:#3a3020; }
 .install-state { display:flex;align-items:center;gap:9px;padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--forest-2); }
 .install-state strong { display:block;font-size:11px; }
 .install-state small { display:block;margin-top:2px;color:var(--muted);font-size:9px; }

@@ -1,7 +1,7 @@
 "use client";
 
 import { Eraser, Eye, Lightbulb, Lock, Minus, Plus, RotateCcw, ScrollText, Shield, SlidersHorizontal, Sun, Swords, Tag, Trash2, Unlock, Users, X } from "lucide-react";
-import { FormEvent, MouseEvent as ReactMouseEvent, PointerEvent, WheelEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import { FormEvent, MouseEvent as ReactMouseEvent, PointerEvent, WheelEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { NAME_DISPLAY_MODES, NAME_DISPLAY_STORAGE_KEY, composeName, isNameDisplayMode, type NameDisplayMode } from "@/lib/display-name";
 import type { CampaignMember, LightSource, MapToken, Scene } from "@/lib/types";
@@ -36,12 +36,24 @@ export function Battlemap(props: Props) {
   const tokenMoved = useRef(false), tokenOrigin = useRef<{ x: number; y: number } | undefined>(undefined);
   const [globalVision, setGlobalVision] = useState(scene.visionRadius ?? 14), [individualVision, setIndividualVision] = useState(scene.visionRadius ?? 14);
   const [viewport, setViewport] = useState({ width: 900, height: 520 }), [image, setImage] = useState({ width: 16, height: 9 });
+  const [baseSize, setBaseSize] = useState<{ width: number; height: number }>();
 
   useEffect(() => {
     const node = viewportRef.current; if (!node) return;
     const measure = () => setViewport({ width: Math.max(1, node.clientWidth), height: Math.max(1, node.clientHeight) });
     measure(); const observer = new ResizeObserver(measure); observer.observe(node); return () => observer.disconnect();
   }, []);
+  /** Tamanho do mapa a 100% de zoom. Le a janela direto do DOM para nao depender do estado. */
+  const refit = useCallback(() => {
+    const node = viewportRef.current;
+    const width = Math.max(1, node?.clientWidth ?? 900), height = Math.max(1, node?.clientHeight ?? 520);
+    if (!scene.mapUrl || scene.mapFit === "stretch") { setBaseSize({ width, height }); return; }
+    const fit = scene.mapFit === "cover"
+      ? Math.max(width / image.width, height / image.height)
+      : Math.min(width / image.width, height / image.height);
+    setBaseSize({ width: image.width * fit, height: image.height * fit });
+  }, [image, scene.mapFit, scene.mapUrl]);
+  useEffect(() => refit(), [refit]);
   useEffect(() => {
     if (zoomFrame.current) cancelAnimationFrame(zoomFrame.current);
     zoomRef.current = zoomTarget.current = 1; setZoom(1);
@@ -141,11 +153,10 @@ export function Battlemap(props: Props) {
     return editor.mode === "create" ? [...storedLights, preview] : storedLights.map((light) => light.id === preview.id ? preview : light);
   }, [editor, storedLights]);
   const visibleHeroTokens = tokens.filter((token) => token.kind === "hero" && (isGM || scene.visionMode !== "individual" || token.ownerId === userId));
-  const mapSize = useMemo(() => {
-    if (!scene.mapUrl || scene.mapFit === "stretch") return { width: viewport.width * zoom, height: viewport.height * zoom };
-    const fit = scene.mapFit === "cover" ? Math.max(viewport.width / image.width, viewport.height / image.height) : Math.min(viewport.width / image.width, viewport.height / image.height);
-    return { width: image.width * fit * zoom, height: image.height * fit * zoom };
-  }, [scene.mapUrl, scene.mapFit, viewport, image, zoom]);
+  const mapSize = useMemo(() => ({
+    width: (baseSize?.width ?? viewport.width) * zoom,
+    height: (baseSize?.height ?? viewport.height) * zoom,
+  }), [baseSize, viewport.height, viewport.width, zoom]);
   const stage = { width: Math.max(viewport.width, mapSize.width), height: Math.max(viewport.height, mapSize.height) };
   // A nevoa e os brilhos usam um viewBox proporcional ao mapa: sem isso, raios iguais
   // viram elipses em mapas que nao sao quadrados.
@@ -167,7 +178,7 @@ export function Battlemap(props: Props) {
         </div></div>
       </div>
 
-      <div className="map-tools"><button onClick={() => changeZoom(zoomTarget.current - .2)} aria-label="Reduzir zoom"><Minus size={17} /></button><span>{Math.round(zoom * 100)}%</span><button onClick={() => changeZoom(zoomTarget.current + .2)} aria-label="Aumentar zoom"><Plus size={17} /></button><button onClick={() => changeZoom(1)} title="Restaurar zoom"><RotateCcw size={16} /></button><i /><label className="map-name-mode" title="Exibição de nomes nos pinos"><Tag size={15} /><select value={nameMode} aria-label="Exibição de nomes nos pinos" onChange={(event) => { const value = event.target.value as NameDisplayMode; setNameMode(value); window.localStorage.setItem(NAME_DISPLAY_STORAGE_KEY, value); }}>{NAME_DISPLAY_MODES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>{isGM && <><i /><button className={lightMode ? "active light-tool-active" : ""} onClick={() => { setLightMode(!lightMode); setRevealMode(false); setEditor(undefined); }} title="Criar ponto de luz"><Lightbulb size={16} /></button></>}{isGM && scene.fogEnabled && <><button className={revealMode ? "active reveal-active" : ""} onClick={() => { setRevealMode(!revealMode); setLightMode(false); }}><Sun size={17} /></button><button onClick={onClearRevealed}><Eraser size={16} /></button><button className={visionOpen ? "active" : ""} onClick={() => setVisionOpen(!visionOpen)}><SlidersHorizontal size={16} /></button></>}</div>
+      <div className="map-tools"><button onClick={() => changeZoom(zoomTarget.current - .2)} aria-label="Reduzir zoom"><Minus size={17} /></button><span>{Math.round(zoom * 100)}%</span><button onClick={() => changeZoom(zoomTarget.current + .2)} aria-label="Aumentar zoom"><Plus size={17} /></button><button onClick={() => { refit(); changeZoom(1); }} title="Reenquadrar o mapa na janela"><RotateCcw size={16} /></button><i /><label className="map-name-mode" title="Exibição de nomes nos pinos"><Tag size={15} /><select value={nameMode} aria-label="Exibição de nomes nos pinos" onChange={(event) => { const value = event.target.value as NameDisplayMode; setNameMode(value); window.localStorage.setItem(NAME_DISPLAY_STORAGE_KEY, value); }}>{NAME_DISPLAY_MODES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>{isGM && <><i /><button className={lightMode ? "active light-tool-active" : ""} onClick={() => { setLightMode(!lightMode); setRevealMode(false); setEditor(undefined); }} title="Criar ponto de luz"><Lightbulb size={16} /></button></>}{isGM && scene.fogEnabled && <><button className={revealMode ? "active reveal-active" : ""} onClick={() => { setRevealMode(!revealMode); setLightMode(false); }}><Sun size={17} /></button><button onClick={onClearRevealed}><Eraser size={16} /></button><button className={visionOpen ? "active" : ""} onClick={() => setVisionOpen(!visionOpen)}><SlidersHorizontal size={16} /></button></>}</div>
       {!hasCharacter ? <div className="character-map-gate"><div><ScrollText size={28} /><h3>Crie sua ficha para entrar no mapa</h3><p>{gateHelp ? "Ainda não encontramos uma ficha nesta campanha. Abra a ficha, informe o nome da personagem e salve; o pino será criado automaticamente." : "Seu pino só aparece e pode se mover depois que uma ficha for salva nesta campanha."}</p><button className="primary-button" onClick={onRequestCharacter}>Criar minha ficha</button><button className="text-button" onClick={() => setGateHelp(true)}>Minha personagem já foi criada</button></div></div> : null}
 
       {editor && <form className="light-config-popover" style={{ left: editor.left, top: editor.top }} onSubmit={saveLight} onPointerDown={(event) => event.stopPropagation()}><header><div><Lightbulb size={16} /><strong>{editor.mode === "create" ? "Confirmar nova luz" : "Editar fonte de luz"}</strong><em className="light-preview-tag">pré-visualização ao vivo</em></div><button type="button" onClick={() => setEditor(undefined)}><X size={15} /></button></header><label>Nome<input value={editor.light.name} onChange={(event) => setEditor({ ...editor, light: { ...editor.light, name: event.target.value } })} /></label><div className="light-popover-grid"><label>Luz intensa <b>{Math.round(bright(editor.light))}%</b><input type="range" min="1" max={dim(editor.light)} value={bright(editor.light)} onChange={(event) => setEditor({ ...editor, light: { ...editor.light, brightRadius: Number(event.target.value) } })} /></label><label>Luz difusa <b>{Math.round(dim(editor.light))}%</b><input type="range" min="3" max="45" value={dim(editor.light)} onChange={(event) => setEditor({ ...editor, light: { ...editor.light, dimRadius: Number(event.target.value), brightRadius: Math.min(bright(editor.light), Number(event.target.value)) } })} /></label></div><div className="light-popover-row"><label>Cor<input type="color" value={editor.light.color} onChange={(event) => setEditor({ ...editor, light: { ...editor.light, color: event.target.value } })} /></label><label>Intensidade <b>{Math.round(editor.light.intensity * 100)}%</b><input type="range" min=".1" max="1" step=".05" value={editor.light.intensity} onChange={(event) => setEditor({ ...editor, light: { ...editor.light, intensity: Number(event.target.value) } })} /></label></div><label className="light-popover-enabled"><input type="checkbox" checked={editor.light.enabled} onChange={(event) => setEditor({ ...editor, light: { ...editor.light, enabled: event.target.checked } })} /> Fonte de luz ativa</label><footer>{editor.mode === "edit" && <button className="delete-light" type="button" onClick={() => { onDeleteLight(editor.light.id); setEditor(undefined); }}><Trash2 size={14} /> Excluir</button>}<button className="primary-button">{editor.mode === "create" ? "Fixar no mapa" : "Salvar alterações"}</button></footer></form>}

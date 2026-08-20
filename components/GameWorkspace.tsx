@@ -41,7 +41,7 @@ import { PlayerNotes } from "@/components/PlayerNotes";
 import { SessionChat } from "@/components/SessionChat";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { useGameSession } from "@/hooks/useGameSession";
-import { characterNameOf, composeName } from "@/lib/display-name";
+import { characterNameOf, composeName, isOnline } from "@/lib/display-name";
 import type { AppUser, Campaign, CampaignMember } from "@/lib/types";
 
 type PanelKey = "sheet" | "history" | "chat" | "journal" | "notes" | "music" | "settings" | "gm";
@@ -231,7 +231,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
     if (sidebarOpen) { setSidebarOpen(false); return; }
     if (activeTab) closePanel(activeTab);
   }, [activeTab, closePanel, inviteOpen, participantsOpen, revealOpen, sidebarOpen]));
-  const onlineCount = game.participants.filter((member) => member.lastSeenAt && Date.now() - member.lastSeenAt < 100000).length;
+  const onlineCount = game.participants.filter((member) => isOnline(member)).length;
   const totalUnread = unreadChat + Object.values(unreadWhispers).reduce((total, count) => total + count, 0);
 
   function getWhisperPartner(partnerId: string): CampaignMember | undefined {

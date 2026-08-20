@@ -1,4 +1,12 @@
-import type { MapToken } from "@/lib/types";
+import type { CampaignMember, MapToken } from "@/lib/types";
+
+/** Janela de tolerancia do batimento de presenca (25 s de intervalo). */
+const PRESENCE_WINDOW_MS = 60_000;
+
+export function isOnline(member: Pick<CampaignMember, "present" | "lastSeenAt">, now = Date.now()) {
+  if (member.present === false) return false;
+  return Boolean(member.lastSeenAt && now - member.lastSeenAt < PRESENCE_WINDOW_MS);
+}
 
 /** Como os nomes dos pinos aparecem no mapa. Preferencia local de cada usuario. */
 export type NameDisplayMode = "character" | "player" | "both" | "none";

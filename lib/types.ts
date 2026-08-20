@@ -26,6 +26,8 @@ export type CampaignMember = {
   role: "gm" | "player";
   joinedAt?: number;
   lastSeenAt?: number;
+  /** Falso quando a aba foi fechada de forma limpa. */
+  present?: boolean;
 };
 
 export type Character = {

@@ -17,6 +17,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { resolveRoll, rollOne } from "@/lib/dice";
 import { db, isFirebaseConfigured } from "@/lib/firebase";
 import { DEFAULT_SHEET_TEMPLATE, normalizeSheetTemplate } from "@/lib/sheet-template";
 import type { AppUser, CampaignJournal, CampaignMember, CampaignMusic, Character, CharacterNotes, ChatMessage, DiceRoll, DiceValidationMode, FogArea, LightSource, MapToken, Scene, SheetTemplate } from "@/lib/types";
@@ -216,6 +217,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
       (snapshot) => setParticipants(snapshot.docs.map((item) => ({
         userId: item.id,
         ...item.data(),
+        present: item.data().present !== false,
         lastSeenAt: item.data().lastSeenAt?.toMillis?.() ?? undefined,
         joinedAt: item.data().joinedAt?.toMillis?.() ?? undefined,
       }) as CampaignMember)),
@@ -235,10 +237,15 @@ export function useGameSession(campaignId: string, user: AppUser) {
     const refreshPresence = () => setDoc(memberRef, {
       name: user.name,
       ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
+      present: true,
       lastSeenAt: serverTimestamp(),
     }, { merge: true });
+    // Marcar a saida evita que o jogador continue "na mesa" ate o batimento
+    // expirar. O pagehide e melhor esforco: pode nao completar se a aba morrer.
+    const markAway = () => void setDoc(memberRef, { present: false }, { merge: true });
     void refreshPresence();
-    const presenceTimer = window.setInterval(() => void refreshPresence(), 45000);
+    const presenceTimer = window.setInterval(() => void refreshPresence(), 25000);
+    window.addEventListener("pagehide", markAway);
 
     return () => {
       unsubscribeCampaign();
@@ -253,6 +260,8 @@ export function useGameSession(campaignId: string, user: AppUser) {
       unsubscribeMembers();
       unsubscribeNotes();
       window.clearInterval(presenceTimer);
+      window.removeEventListener("pagehide", markAway);
+      markAway();
     };
   }, [campaignId, online, user]);
 
@@ -282,12 +291,8 @@ export function useGameSession(campaignId: string, user: AppUser) {
 
   const rollDie = useCallback(async (sides: number, modifier: number, quantity = 1, validationMode: DiceValidationMode = "sum") => {
     const safeQuantity = Math.max(1, Math.min(20, Math.round(quantity)));
-    const results = Array.from({ length: safeQuantity }, () => Math.floor(Math.random() * sides) + 1);
-    const value = validationMode === "highest"
-      ? Math.max(...results)
-      : validationMode === "lowest"
-        ? Math.min(...results)
-        : results.reduce((total, result) => total + result, 0);
+    const results = Array.from({ length: safeQuantity }, () => rollOne(sides));
+    const value = resolveRoll(results, validationMode);
     const next: DiceRoll = {
       id: crypto.randomUUID(), userId: user.id, userName: user.name, sides, value,
       modifier, total: value + modifier, quantity: safeQuantity, results, validationMode, createdAt: Date.now(),

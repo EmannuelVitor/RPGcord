@@ -3,6 +3,7 @@
 import { ArrowRight, Dices, Minus, Plus, ScrollText, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { characterNameOf, composeName } from "@/lib/display-name";
+import { VALIDATION_LABELS } from "@/lib/dice";
 import { buildCharacterFields } from "@/lib/sheet-template";
 import type { Character, DiceRoll, DiceValidationMode, MapToken, SheetStatusValue, SheetTemplate } from "@/lib/types";
 
@@ -18,11 +19,6 @@ type Props = {
 };
 
 const dice = [4, 6, 8, 10, 12, 20, 100];
-const validationLabels: Record<DiceValidationMode, string> = {
-  highest: "Pegar o maior dado",
-  lowest: "Pegar o menor dado",
-  sum: "Somar todos os dados",
-};
 
 function relativeTime(timestamp: number) {
   const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
@@ -142,7 +138,7 @@ export function DiceRoller({ rolls, tokens = [], character, template, hasCharact
             <div className="roll-copy">
               <strong>{nameOf(roll)}</strong>
               <span>rolou {roll.quantity && roll.quantity > 1 ? `${roll.quantity}d${roll.sides}` : `d${roll.sides}`}{roll.modifier ? ` ${roll.modifier > 0 ? "+" : ""}${roll.modifier}` : ""}</span>
-              {roll.results && roll.results.length > 1 && <span className="roll-details">{validationLabels[roll.validationMode ?? "sum"]}: [{roll.results.join(", ")}]</span>}
+              <span className="roll-details">{VALIDATION_LABELS[roll.validationMode ?? "sum"]}{roll.results && roll.results.length > 1 ? `: [${roll.results.join(", ")}]` : ""}</span>
             </div>
             <div className="roll-result">
               <strong>{roll.total}</strong>

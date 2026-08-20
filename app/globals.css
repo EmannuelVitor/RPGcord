@@ -215,6 +215,9 @@ button:disabled { opacity:.6;cursor:not-allowed; }
 .map-light-marker { position:absolute;z-index:11;width:30px;height:30px;display:grid;place-items:center;transform:translate(-50%,-50%);border:2px solid #fff;border-radius:50%;background:var(--light-color);color:#493915;box-shadow:0 0 0 3px rgba(255,220,130,.32),0 0 22px var(--light-color);touch-action:none;user-select:none; }
 /* Seletor de exibicao de nomes nos pinos, junto dos controles de zoom. */
 /* Resumo do personagem, no topo do oraculo de rolagem. */
+.install-state { display:flex;align-items:center;gap:9px;padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--forest-2); }
+.install-state strong { display:block;font-size:11px; }
+.install-state small { display:block;margin-top:2px;color:var(--muted);font-size:9px; }
 .dice-character { padding:14px 14px 13px;border-bottom:1px solid var(--line); }
 .dice-character.empty { opacity:.85; }
 .dice-character-head { display:flex;align-items:center;gap:10px; }

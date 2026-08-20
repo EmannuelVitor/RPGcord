@@ -60,7 +60,7 @@ export function CampaignHub({ user, campaigns, loading, error, onSelect, onCreat
   return (
     <main className="hub-shell">
       <header className="hub-header">
-        <div className="brand hub-brand"><span className="brand-mark"><BrandMark size={38} /></span><div><strong>RPGcord</strong><small>RPG COMPANION</small></div></div>
+        <div className="brand hub-brand"><span className="brand-mark"><BrandMark size={38} /></span><div><strong>RPGcord</strong><small>MESA DE RPG AO VIVO</small></div></div>
         <div className="hub-user">
           <button className="icon-button" onClick={onTutorial} title="Como usar o RPGcord"><HelpCircle size={17} /></button>
           <span className="user-avatar">{user.avatarUrl ? <img src={user.avatarUrl} alt="" /> : user.name.slice(0, 1)}</span>

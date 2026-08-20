@@ -270,7 +270,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onSignOut, onTutori
       <button className="mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Abrir menu"><Menu /></button>
       <button className="sidebar-toggle" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Exibir menu lateral" : "Ocultar menu lateral"}>{sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button>
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-        <div className="brand"><span className="brand-mark"><BrandMark size={38} /></span><div><strong>RPGcord</strong><small>RPG COMPANION</small></div></div>
+        <div className="brand"><span className="brand-mark"><BrandMark size={38} /></span><div><strong>RPGcord</strong><small>MESA DE RPG AO VIVO</small></div></div>
         <button className="sidebar-close" onClick={() => setSidebarOpen(false)}><X size={18} /></button>
         <nav>
           <p>Jornada</p>

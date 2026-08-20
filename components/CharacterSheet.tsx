@@ -62,7 +62,7 @@ export function CharacterSheet({ campaignId, character, template, embedded = fal
     setSaving(true);
     setError(undefined);
     try {
-      let imageUrl = toDirectDriveUrl(draft.imageUrl ?? "");
+      let imageUrl = toDirectDriveUrl(draft.imageUrl ?? "", campaignId);
       if (imageFile) {
         if (imageFile.size > 4 * 1024 * 1024) throw new Error("A imagem pode ter no máximo 4 MB.");
         const token = await auth?.currentUser?.getIdToken();
@@ -112,7 +112,7 @@ export function CharacterSheet({ campaignId, character, template, embedded = fal
         <label className="wide">Nome<input required value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
         <label className="wide">Imagem da personagem<span className="image-link-field"><ImageIcon size={16} /><input placeholder="Link público da imagem ou do Google Drive" value={draft.imageUrl ?? ""} onChange={(event) => setDraft({ ...draft, imageUrl: event.target.value })} /></span></label>
         <label className="character-upload wide"><Upload size={17} /><span><strong>Enviar uma imagem</strong><small>JPG, PNG, WebP ou GIF — até 4 MB</small></span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(event) => setImageFile(event.target.files?.[0])} /></label>
-        {(imagePreview || draft.imageUrl) && <div className="character-image-preview"><img src={imagePreview || toDirectDriveUrl(draft.imageUrl ?? "")} alt="Prévia da personagem" /></div>}
+        {(imagePreview || draft.imageUrl) && <div className="character-image-preview"><img src={imagePreview || toDirectDriveUrl(draft.imageUrl ?? "", campaignId)} alt="Prévia da personagem" /></div>}
         {imageFile && <div className="character-upload-name"><span>{imageFile.name}</span><button type="button" onClick={() => setImageFile(undefined)}><X size={14} /> Remover</button></div>}
         {error && <p className="sheet-error wide">{error}</p>}
       </div>

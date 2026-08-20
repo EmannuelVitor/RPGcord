@@ -279,7 +279,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
     if (panel === "notes") return <PlayerNotes embedded notes={game.notes} participants={game.participants} userId={user.id} onSave={game.saveNotes} onClose={() => closePanel("notes")} />;
     if (panel === "initiative") return <InitiativeTracker embedded initiative={game.initiative} tokens={game.tokens} isGM={game.isGM} onSave={game.saveInitiative} onClose={() => closePanel("initiative")} />;
     if (panel === "settings") return <SettingsPanel embedded appearance={appearance} onClose={() => closePanel("settings")} />;
-    if (panel === "gm" && game.isGM) return <GameMasterPanel embedded scene={game.scene} tokens={game.tokens} sheetTemplate={game.sheetTemplate} ownerId={user.id} onSaveScene={game.saveScene} onSaveSheetTemplate={game.saveSheetTemplate} onAddToken={game.addToken} onRemoveToken={game.removeToken} onSetTokenHidden={game.setTokenHidden} onClose={() => closePanel("gm")} />;
+    if (panel === "gm" && game.isGM) return <GameMasterPanel embedded campaignId={campaign.id} scene={game.scene} tokens={game.tokens} sheetTemplate={game.sheetTemplate} ownerId={user.id} onSaveScene={game.saveScene} onSaveSheetTemplate={game.saveSheetTemplate} onAddToken={game.addToken} onRemoveToken={game.removeToken} onSetTokenHidden={game.setTokenHidden} onClose={() => closePanel("gm")} />;
     return null;
   }
 

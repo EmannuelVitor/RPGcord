@@ -7,6 +7,7 @@ import { SheetTemplateEditor } from "@/components/SheetTemplateEditor";
 import type { MapToken, Scene, SheetTemplate } from "@/lib/types";
 
 type Props = {
+  campaignId: string;
   scene: Scene;
   tokens: MapToken[];
   sheetTemplate: SheetTemplate;
@@ -20,7 +21,7 @@ type Props = {
   onClose: () => void;
 };
 
-export function GameMasterPanel({ scene, tokens, sheetTemplate, ownerId, embedded = false, onSaveScene, onSaveSheetTemplate, onAddToken, onRemoveToken, onSetTokenHidden, onClose }: Props) {
+export function GameMasterPanel({ campaignId, scene, tokens, sheetTemplate, ownerId, embedded = false, onSaveScene, onSaveSheetTemplate, onAddToken, onRemoveToken, onSetTokenHidden, onClose }: Props) {
   const [draft, setDraft] = useState(scene);
   const [tokenName, setTokenName] = useState("");
   const [tokenImage, setTokenImage] = useState("");
@@ -37,8 +38,8 @@ export function GameMasterPanel({ scene, tokens, sheetTemplate, ownerId, embedde
     event.preventDefault();
     await onSaveScene({
       ...draft,
-      mapUrl: toDirectDriveUrl(draft.mapUrl),
-      revealUrl: toDirectDriveUrl(draft.revealUrl),
+      mapUrl: toDirectDriveUrl(draft.mapUrl, campaignId),
+      revealUrl: toDirectDriveUrl(draft.revealUrl, campaignId),
       mapFit: draft.mapFit ?? "contain",
       gridEnabled: Boolean(draft.gridEnabled),
       gridSize: Math.max(12, Math.min(160, Math.round(draft.gridSize || 48))),
@@ -75,7 +76,7 @@ export function GameMasterPanel({ scene, tokens, sheetTemplate, ownerId, embedde
     const token: MapToken = {
       id: crypto.randomUUID(), ownerId, name: tokenName.trim(),
       initials: tokenName.trim().split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
-      x: 50, y: 40, color: "#b75252", imageUrl: toDirectDriveUrl(tokenImage), kind: "monster",
+      x: 50, y: 40, color: "#b75252", imageUrl: toDirectDriveUrl(tokenImage, campaignId), kind: "monster",
     };
     await onAddToken(token);
     setTokenName("");

@@ -1,9 +1,9 @@
 "use client";
 
-import { Music2, Pause, Play, Save, Volume2, X } from "lucide-react";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { Music2, Pause, Play, Volume2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { CampaignMusic } from "@/lib/types";
-import { parseYouTubeUrl, toYouTubeEmbedUrl } from "@/lib/youtube";
+import { parseYouTubeUrl } from "@/lib/youtube";
 
 type YTPlayer = {
   destroy: () => void;
@@ -49,13 +49,11 @@ function loadYouTubeApi() {
 }
 
 type Props = {
-  open: boolean;
   music: CampaignMusic;
   isGM: boolean;
-  onSave: (music: CampaignMusic) => Promise<void>;
   onPlayback: (playing: boolean, position: number) => Promise<void>;
-  onOpen?: () => void;
-  onClose: () => void;
+  /** Abre a guia de configuracao da trilha. */
+  onOpen: () => void;
 };
 
 function formatTime(value: number) {
@@ -63,9 +61,7 @@ function formatTime(value: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-export function MusicPlayer({ open, music, isGM, onSave, onPlayback, onOpen = () => undefined, onClose }: Props) {
-  const [draft, setDraft] = useState(music);
-  const [error, setError] = useState<string>();
+export function MusicPlayer({ music, isGM, onPlayback, onOpen }: Props) {
   const [ready, setReady] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -83,7 +79,6 @@ export function MusicPlayer({ open, music, isGM, onSave, onPlayback, onOpen = ()
   useEffect(() => { musicRef.current = music; }, [music]);
   useEffect(() => { audioEnabledRef.current = audioEnabled; }, [audioEnabled]);
   useEffect(() => { playbackRef.current = onPlayback; }, [onPlayback]);
-  useEffect(() => { setDraft(music); }, [music]);
 
   function synchronizedPosition(value = musicRef.current) {
     if (!value.playing || !value.startedAt) return value.position;
@@ -148,11 +143,16 @@ export function MusicPlayer({ open, music, isGM, onSave, onPlayback, onOpen = ()
       appliedPlayingRef.current = undefined;
       container.replaceChildren();
     };
+    // Recria o player so quando a faixa ou o loop mudam: incluir as demais
+    // dependencias reiniciaria a reproducao a cada ajuste de volume ou posicao.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [music.loop, music.youtubeUrl]);
 
   useEffect(() => {
     setPosition(synchronizedPosition(music));
     applySharedPlayback(true);
+    // Reage apenas ao estado compartilhado pelo mestre.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [music.playing, music.position, music.startedAt]);
 
   useEffect(() => {
@@ -165,19 +165,9 @@ export function MusicPlayer({ open, music, isGM, onSave, onPlayback, onOpen = ()
       if (audioEnabledRef.current && musicRef.current.playing && Math.abs(current - synchronizedPosition()) > 6) applySharedPlayback(false);
     }, 800);
     return () => window.clearInterval(timer);
+    // O intervalo le tudo por referencia; recriar a cada render zeraria o relogio.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const nextUrl = draft.youtubeUrl.trim();
-    if (nextUrl && !toYouTubeEmbedUrl(nextUrl, draft.loop)) {
-      setError("Cole um link válido de vídeo ou playlist do YouTube.");
-      return;
-    }
-    const changedTrack = nextUrl !== music.youtubeUrl;
-    setError(undefined);
-    await onSave({ ...draft, youtubeUrl: nextUrl, title: draft.title.trim(), playing: changedTrack ? false : music.playing, position: changedTrack ? 0 : music.position, startedAt: changedTrack ? undefined : music.startedAt });
-  }
 
   async function togglePlayback() {
     const player = playerRef.current;
@@ -211,22 +201,6 @@ export function MusicPlayer({ open, music, isGM, onSave, onPlayback, onOpen = ()
         </div>
       </section>
 
-      {open && <div className="drawer-backdrop music-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-        <aside className="drawer music-drawer">
-          <header><div><p className="eyebrow">Trilha da mesa</p><h2><Music2 size={19} /> Música da campanha</h2></div><button className="icon-button" onClick={onClose} aria-label="Fechar"><X size={20} /></button></header>
-          <div className="music-content">
-            {hasMusic ? <div className="music-shared-status"><Music2 /><div><strong>{music.title || "Trilha selecionada"}</strong><span>{music.playing ? "Tocando sincronizada para o grupo" : "Pausada pelo mestre"}</span></div></div> : <div className="music-empty"><Music2 /><strong>Nenhuma trilha selecionada</strong><span>O mestre pode adicionar um vídeo ou uma playlist do YouTube.</span></div>}
-            <p className="music-note">Cada participante precisa clicar uma vez em “Ativar áudio sincronizado”. Depois, tocar, pausar e buscar são comandados pelo mestre para o grupo inteiro.</p>
-            {isGM && <form className="music-form" onSubmit={submit}>
-              <label>Nome da trilha<input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="Ex.: Exploração da floresta" /></label>
-              <label>Link do YouTube<input value={draft.youtubeUrl} onChange={(event) => setDraft({ ...draft, youtubeUrl: event.target.value })} placeholder="Vídeo ou playlist do YouTube" /></label>
-              <label className="toggle-field"><input type="checkbox" checked={draft.loop} onChange={(event) => setDraft({ ...draft, loop: event.target.checked })} /><span><strong>Repetir a trilha</strong><small>Vídeos individuais e playlists podem tocar em loop.</small></span></label>
-              {error && <p className="music-error">{error}</p>}
-              <button className="primary-button full"><Save size={16} /> Salvar para a campanha</button>
-            </form>}
-          </div>
-        </aside>
-      </div>}
     </>
   );
 }

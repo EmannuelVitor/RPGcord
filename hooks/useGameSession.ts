@@ -5,6 +5,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   limit,
   onSnapshot,
   orderBy,
@@ -13,11 +14,13 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { resolveRoll, rollOne } from "@/lib/dice";
 import { db, isFirebaseConfigured } from "@/lib/firebase";
 import { DEFAULT_SHEET_TEMPLATE, normalizeSheetTemplate } from "@/lib/sheet-template";
-import type { AppUser, CampaignJournal, CampaignMember, CampaignMusic, Character, CharacterNotes, ChatMessage, DiceRoll, DiceValidationMode, LightSource, MapToken, Scene, SheetTemplate } from "@/lib/types";
+import type { AppUser, CampaignJournal, CampaignMember, CampaignMusic, Character, CharacterNotes, ChatMessage, DiceRoll, DiceValidationMode, FogArea, LightSource, MapToken, Scene, SheetTemplate } from "@/lib/types";
 
 function blankCharacter(user: AppUser): Character {
   return {
@@ -42,6 +45,7 @@ const initialScene: Scene = {
   mapUrl: "",
   revealUrl: "",
   gridSize: 48,
+  gridEnabled: false,
   mapFit: "contain",
   fogEnabled: false,
   visionRadius: 14,
@@ -51,6 +55,25 @@ const initialScene: Scene = {
   revealedAreas: [],
   dynamicLights: [],
 };
+
+/** Teto de areas reveladas guardadas na cena. */
+const MAX_REVEALED_AREAS = 240;
+
+/**
+ * Descarta revelacoes praticamente sobrepostas antes de aplicar o teto. Pintar
+ * a nevoa por arraste gera muitos circulos proximos, e um corte cego apagaria
+ * areas antigas sem o mestre perceber.
+ */
+function dedupeRevealed(areas: FogArea[]) {
+  const kept: FogArea[] = [];
+  for (const area of areas) {
+    const covered = kept.some((other) =>
+      other.radius >= area.radius &&
+      Math.hypot(other.x - area.x, other.y - area.y) < Math.min(other.radius, area.radius) * .45);
+    if (!covered) kept.push(area);
+  }
+  return kept.slice(-MAX_REVEALED_AREAS);
+}
 
 const initialJournal: CampaignJournal = { content: "" };
 const initialMusic: CampaignMusic = { youtubeUrl: "", title: "", loop: false, playing: false, position: 0 };
@@ -79,6 +102,10 @@ export function useGameSession(campaignId: string, user: AppUser) {
   const [notes, setNotes] = useState<CharacterNotes>(initialNotes);
   const [participants, setParticipants] = useState<CampaignMember[]>([]);
   const [gmId, setGmId] = useState("");
+  // Espelha a cena para que as acoes rapidas do mapa nao leiam um valor velho
+  // capturado no fechamento do callback.
+  const sceneRef = useRef(scene);
+  sceneRef.current = scene;
   const [syncError, setSyncError] = useState<string>();
   const online = isFirebaseConfigured && Boolean(db);
 
@@ -180,7 +207,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
       () => setSyncError("O chat da sessão não pôde ser sincronizado."),
     );
     const unsubscribeWhispers = onSnapshot(
-      query(collection(db, "campaigns", campaignId, "whispers"), where("participantIds", "array-contains", user.id), limit(100)),
+      query(collection(db, "campaigns", campaignId, "whispers"), where("participantIds", "array-contains", user.id), orderBy("createdAt", "desc"), limit(100)),
       (snapshot) => setWhisperMessages(snapshot.docs.map((item) => ({
         id: item.id,
         ...item.data(),
@@ -193,6 +220,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
       (snapshot) => setParticipants(snapshot.docs.map((item) => ({
         userId: item.id,
         ...item.data(),
+        present: item.data().present !== false,
         lastSeenAt: item.data().lastSeenAt?.toMillis?.() ?? undefined,
         joinedAt: item.data().joinedAt?.toMillis?.() ?? undefined,
       }) as CampaignMember)),
@@ -212,10 +240,15 @@ export function useGameSession(campaignId: string, user: AppUser) {
     const refreshPresence = () => setDoc(memberRef, {
       name: user.name,
       ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
+      present: true,
       lastSeenAt: serverTimestamp(),
     }, { merge: true });
+    // Marcar a saida evita que o jogador continue "na mesa" ate o batimento
+    // expirar. O pagehide e melhor esforco: pode nao completar se a aba morrer.
+    const markAway = () => void setDoc(memberRef, { present: false }, { merge: true });
     void refreshPresence();
-    const presenceTimer = window.setInterval(() => void refreshPresence(), 45000);
+    const presenceTimer = window.setInterval(() => void refreshPresence(), 25000);
+    window.addEventListener("pagehide", markAway);
 
     return () => {
       unsubscribeCampaign();
@@ -230,6 +263,8 @@ export function useGameSession(campaignId: string, user: AppUser) {
       unsubscribeMembers();
       unsubscribeNotes();
       window.clearInterval(presenceTimer);
+      window.removeEventListener("pagehide", markAway);
+      markAway();
     };
   }, [campaignId, online, user]);
 
@@ -259,12 +294,8 @@ export function useGameSession(campaignId: string, user: AppUser) {
 
   const rollDie = useCallback(async (sides: number, modifier: number, quantity = 1, validationMode: DiceValidationMode = "sum") => {
     const safeQuantity = Math.max(1, Math.min(20, Math.round(quantity)));
-    const results = Array.from({ length: safeQuantity }, () => Math.floor(Math.random() * sides) + 1);
-    const value = validationMode === "highest"
-      ? Math.max(...results)
-      : validationMode === "lowest"
-        ? Math.min(...results)
-        : results.reduce((total, result) => total + result, 0);
+    const results = Array.from({ length: safeQuantity }, () => rollOne(sides));
+    const value = resolveRoll(results, validationMode);
     const next: DiceRoll = {
       id: crypto.randomUUID(), userId: user.id, userName: user.name, sides, value,
       modifier, total: value + modifier, quantity: safeQuantity, results, validationMode, createdAt: Date.now(),
@@ -297,6 +328,11 @@ export function useGameSession(campaignId: string, user: AppUser) {
     if (online && db) await setDoc(doc(db, "campaigns", campaignId, "tokens", token.id), token);
   }, [campaignId, online]);
 
+  const setTokenHidden = useCallback(async (tokenId: string, hidden: boolean) => {
+    setTokens((current) => current.map((token) => token.id === tokenId ? { ...token, hidden } : token));
+    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "tokens", tokenId), { hidden }, { merge: true });
+  }, [campaignId, online]);
+
   const removeToken = useCallback(async (tokenId: string) => {
     setTokens((current) => current.filter((token) => token.id !== tokenId));
     if (online && db) await deleteDoc(doc(db, "campaigns", campaignId, "tokens", tokenId));
@@ -307,48 +343,50 @@ export function useGameSession(campaignId: string, user: AppUser) {
     if (online && db) await setDoc(doc(db, "campaigns", campaignId, "scenes", "active"), next);
   }, [campaignId, online]);
 
-  const revealArea = useCallback(async (x: number, y: number) => {
-    const next: Scene = {
-      ...scene,
-      revealedAreas: [...(scene.revealedAreas ?? []), {
-        id: crypto.randomUUID(),
-        x,
-        y,
-        radius: scene.visionRadius ?? 14,
-      }].slice(-60),
-    };
-    await saveScene(next);
-  }, [saveScene, scene]);
+  /**
+   * Grava so os campos alterados da cena. Revelar nevoa e arrastar luzes
+   * reescreviam o documento inteiro a cada clique, inclusive todas as luzes.
+   */
+  const patchScene = useCallback(async (patch: Partial<Scene>) => {
+    setScene((current) => ({ ...current, ...patch }));
+    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "scenes", "active"), patch, { merge: true });
+  }, [campaignId, online]);
 
   const clearRevealed = useCallback(async () => {
-    await saveScene({ ...scene, revealedAreas: [] });
-  }, [saveScene, scene]);
+    await patchScene({ revealedAreas: [] });
+  }, [patchScene]);
+
+  /**
+   * Grava o traco inteiro do pincel de nevoa de uma vez. Pintar por arraste
+   * emitindo uma escrita por circulo geraria dezenas de gravacoes por gesto.
+   */
+  const commitRevealed = useCallback(async (areas: FogArea[]) => {
+    await patchScene({ revealedAreas: dedupeRevealed(areas) });
+  }, [patchScene]);
 
   const moveLight = useCallback(async (lightId: string, x: number, y: number) => {
-    await saveScene({
-      ...scene,
-      dynamicLights: (scene.dynamicLights ?? []).map((light) => light.id === lightId ? { ...light, x, y } : light),
+    await patchScene({
+      dynamicLights: (sceneRef.current.dynamicLights ?? []).map((light) => light.id === lightId ? { ...light, x, y } : light),
     });
-  }, [saveScene, scene]);
+  }, [patchScene]);
 
   const createLight = useCallback(async (light: LightSource) => {
-    await saveScene({ ...scene, dynamicLights: [...(scene.dynamicLights ?? []), normalizeLight(light)] });
-  }, [saveScene, scene]);
+    await patchScene({ dynamicLights: [...(sceneRef.current.dynamicLights ?? []), normalizeLight(light)] });
+  }, [patchScene]);
 
   const updateLight = useCallback(async (light: LightSource) => {
-    await saveScene({
-      ...scene,
-      dynamicLights: (scene.dynamicLights ?? []).map((item) => item.id === light.id ? normalizeLight(light) : item),
+    await patchScene({
+      dynamicLights: (sceneRef.current.dynamicLights ?? []).map((item) => item.id === light.id ? normalizeLight(light) : item),
     });
-  }, [saveScene, scene]);
+  }, [patchScene]);
 
   const deleteLight = useCallback(async (lightId: string) => {
-    await saveScene({ ...scene, dynamicLights: (scene.dynamicLights ?? []).filter((light) => light.id !== lightId) });
-  }, [saveScene, scene]);
+    await patchScene({ dynamicLights: (sceneRef.current.dynamicLights ?? []).filter((light) => light.id !== lightId) });
+  }, [patchScene]);
 
   const setGlobalVision = useCallback(async (radius: number) => {
-    await saveScene({ ...scene, visionRadius: Math.max(3, Math.min(45, radius)) });
-  }, [saveScene, scene]);
+    await patchScene({ visionRadius: Math.max(3, Math.min(45, radius)) });
+  }, [patchScene]);
 
   const setTokenVision = useCallback(async (tokenId: string, radius?: number) => {
     const normalized = radius == null ? null : Math.max(3, Math.min(45, radius));
@@ -417,14 +455,24 @@ export function useGameSession(campaignId: string, user: AppUser) {
   }, [campaignId, music, online]);
 
   const clearChat = useCallback(async () => {
-    const current = chatMessages;
     setChatMessages([]);
     const firestore = db;
-    if (online && firestore) await Promise.all(current.map((message) => deleteDoc(doc(firestore, "campaigns", campaignId, "chatMessages", message.id))));
-  }, [campaignId, chatMessages, online]);
+    if (!online || !firestore) return;
+    // Percorre a colecao inteira: apagar apenas as mensagens carregadas deixava
+    // o resto no banco, e elas reapareciam na proxima consulta.
+    const messages = collection(firestore, "campaigns", campaignId, "chatMessages");
+    for (;;) {
+      const page = await getDocs(query(messages, limit(400)));
+      if (page.empty) return;
+      const batch = writeBatch(firestore);
+      page.docs.forEach((item) => batch.delete(item.ref));
+      await batch.commit();
+      if (page.size < 400) return;
+    }
+  }, [campaignId, online]);
 
   return useMemo(() => ({
     character, hasCharacter, rolls, tokens, scene, journal, music, sheetTemplate, chatMessages, whisperMessages, notes, participants, isGM: gmId === user.id, online, syncError,
-    saveCharacter, rollDie, moveToken, toggleTokenLock, addToken, removeToken, saveScene, revealArea, clearRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveMusic, updateMusicPlayback,
-  }), [addToken, character, chatMessages, clearChat, clearRevealed, createLight, deleteLight, gmId, hasCharacter, journal, moveLight, moveToken, music, notes, online, participants, removeToken, revealArea, rollDie, rolls, saveCharacter, saveJournal, saveMusic, saveNotes, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, sheetTemplate, syncError, toggleTokenLock, tokens, updateLight, updateMusicPlayback, user.id, whisperMessages]);
+    saveCharacter, rollDie, moveToken, toggleTokenLock, addToken, removeToken, setTokenHidden, saveScene, clearRevealed, commitRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveMusic, updateMusicPlayback,
+  }), [addToken, character, chatMessages, clearChat, clearRevealed, commitRevealed, setTokenHidden, createLight, deleteLight, gmId, hasCharacter, journal, moveLight, moveToken, music, notes, online, participants, removeToken, rollDie, rolls, saveCharacter, saveJournal, saveMusic, saveNotes, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, sheetTemplate, syncError, toggleTokenLock, tokens, updateLight, updateMusicPlayback, user.id, whisperMessages]);
 }

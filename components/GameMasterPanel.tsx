@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, Lightbulb, Map, Moon, Plus, Save, ScrollText, Trash2, X } from "lucide-react";
+import { Eye, EyeOff, Lightbulb, Map, Moon, Plus, Save, ScrollText, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { toDirectDriveUrl } from "@/lib/drive";
 import { SheetTemplateEditor } from "@/components/SheetTemplateEditor";
@@ -15,11 +15,12 @@ type Props = {
   onSaveSheetTemplate: (template: SheetTemplate) => Promise<void>;
   onAddToken: (token: MapToken) => Promise<void>;
   onRemoveToken: (id: string) => Promise<void>;
+  onSetTokenHidden: (id: string, hidden: boolean) => Promise<void>;
   embedded?: boolean;
   onClose: () => void;
 };
 
-export function GameMasterPanel({ scene, tokens, sheetTemplate, ownerId, embedded = false, onSaveScene, onSaveSheetTemplate, onAddToken, onRemoveToken, onClose }: Props) {
+export function GameMasterPanel({ scene, tokens, sheetTemplate, ownerId, embedded = false, onSaveScene, onSaveSheetTemplate, onAddToken, onRemoveToken, onSetTokenHidden, onClose }: Props) {
   const [draft, setDraft] = useState(scene);
   const [tokenName, setTokenName] = useState("");
   const [tokenImage, setTokenImage] = useState("");
@@ -39,6 +40,8 @@ export function GameMasterPanel({ scene, tokens, sheetTemplate, ownerId, embedde
       mapUrl: toDirectDriveUrl(draft.mapUrl),
       revealUrl: toDirectDriveUrl(draft.revealUrl),
       mapFit: draft.mapFit ?? "contain",
+      gridEnabled: Boolean(draft.gridEnabled),
+      gridSize: Math.max(12, Math.min(160, Math.round(draft.gridSize || 48))),
       visionRadius: Math.max(3, Math.min(45, draft.visionRadius ?? 14)),
       visionMode: draft.visionMode ?? "shared",
       ambientLight: Math.max(0, Math.min(1, draft.ambientLight ?? 0)),
@@ -87,8 +90,9 @@ export function GameMasterPanel({ scene, tokens, sheetTemplate, ownerId, embedde
           <h3><Map size={17} /> Mapa ativo</h3>
           <label>Nome da cena<input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
           <label>Link ou ID da imagem no Google Drive<input placeholder="https://drive.google.com/file/d/..." value={draft.mapUrl} onChange={(event) => setDraft({ ...draft, mapUrl: event.target.value })} /></label>
+          <label className="toggle-field"><input type="checkbox" checked={draft.gridEnabled ?? false} onChange={(event) => setDraft({ ...draft, gridEnabled: event.target.checked })} /><span><strong>Mostrar grade sobre o mapa</strong><small>Quadriculado de apoio para medir distâncias. Acompanha o zoom.</small></span></label>
           <div className="inline-fields">
-            <label>Tamanho da grade<input type="number" min="24" max="96" value={draft.gridSize} onChange={(event) => setDraft({ ...draft, gridSize: Number(event.target.value) })} /></label>
+            <label>Tamanho da grade (px)<input type="number" min="12" max="160" value={draft.gridSize} onChange={(event) => setDraft({ ...draft, gridSize: Number(event.target.value) })} /></label>
             <label>Ajuste da imagem<select value={draft.mapFit ?? "contain"} onChange={(event) => setDraft({ ...draft, mapFit: event.target.value as Scene["mapFit"] })}><option value="contain">Mostrar mapa inteiro</option><option value="cover">Preencher a área</option><option value="stretch">Esticar até as bordas</option></select></label>
           </div>
           <p className="field-help">Aceita mapas de qualquer resolução. “Mostrar mapa inteiro” evita cortes na imagem.</p>
@@ -140,7 +144,8 @@ export function GameMasterPanel({ scene, tokens, sheetTemplate, ownerId, embedde
         <label>Nome<input placeholder="Ex.: Sentinela goblin" value={tokenName} onChange={(event) => setTokenName(event.target.value)} /></label>
         <label>Imagem opcional<input placeholder="Link do Google Drive" value={tokenImage} onChange={(event) => setTokenImage(event.target.value)} /></label>
         <button className="secondary-button full" onClick={() => void createToken()}><Plus size={16} /> Colocar no mapa</button>
-        <div className="token-list">{tokens.filter((token) => token.kind === "monster").map((token) => <div key={token.id}><span className="mini-token" style={{ background: token.color }}>{token.initials}</span><strong>{token.name}</strong><button onClick={() => onRemoveToken(token.id)} aria-label={"Remover " + token.name}><Trash2 size={15} /></button></div>)}</div>
+<p className="field-help">Criaturas ocultas aparecem só para você, esmaecidas no mapa. Revele-as quando o grupo encontrá-las.</p>
+        <div className="token-list">{tokens.filter((token) => token.kind === "monster").map((token) => <div key={token.id}><span className="mini-token" style={{ background: token.color }}>{token.initials}</span><strong>{token.name}</strong><button className={token.hidden ? "token-hidden-toggle active" : "token-hidden-toggle"} onClick={() => void onSetTokenHidden(token.id, !token.hidden)} title={token.hidden ? "Revelar para os jogadores" : "Ocultar dos jogadores"} aria-label={(token.hidden ? "Revelar " : "Ocultar ") + token.name}>{token.hidden ? <EyeOff size={15} /> : <Eye size={15} />}</button><button onClick={() => onRemoveToken(token.id)} aria-label={"Remover " + token.name}><Trash2 size={15} /></button></div>)}</div>
       </section>
     </aside>
   </div>;

@@ -1,10 +1,17 @@
 "use client";
 
-import { Moon, Settings, Sun, X } from "lucide-react";
+import { Check, Download, Moon, Settings, Sun, X } from "lucide-react";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
+import type { useTheme } from "@/hooks/useTheme";
+import { useInstallPrompt } from "@/hooks/useInstallPrompt";
 
-type Props = { theme: "light" | "dark"; embedded?: boolean; onTheme: (theme: "light" | "dark") => void; onClose: () => void };
+type Props = { appearance: ReturnType<typeof useTheme>; embedded?: boolean; onClose: () => void };
 
-export function SettingsPanel({ theme, embedded = false, onTheme, onClose }: Props) {
+export function SettingsPanel({ appearance, embedded = false, onClose }: Props) {
+  const { theme, chosen, chooseTheme, followSystem } = appearance;
+  const { canInstall, installed, install } = useInstallPrompt();
+  useEscapeKey(onClose, !embedded);
+
   return (
     <div className={"drawer-backdrop settings-backdrop" + (embedded ? " embedded" : "")} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <aside className="drawer settings-drawer">
@@ -12,10 +19,21 @@ export function SettingsPanel({ theme, embedded = false, onTheme, onClose }: Pro
         <section className="settings-content">
           <h3>Aparência</h3>
           <div className="theme-options">
-            <button className={theme === "light" ? "active" : ""} onClick={() => onTheme("light")}><Sun /><strong>Modo claro</strong><span>Visual atual do RPGcord</span></button>
-            <button className={theme === "dark" ? "active" : ""} onClick={() => onTheme("dark")}><Moon /><strong>Modo escuro</strong><span>Menos brilho durante a sessão</span></button>
+            <button className={chosen && theme === "light" ? "active" : ""} onClick={() => chooseTheme("light")}><Sun /><strong>Modo claro</strong><span>Pergaminho e violeta</span></button>
+            <button className={chosen && theme === "dark" ? "active" : ""} onClick={() => chooseTheme("dark")}><Moon /><strong>Modo escuro</strong><span>Menos brilho durante a sessão</span></button>
           </div>
-          <p>A preferência fica salva somente neste navegador.</p>
+          <p>{chosen
+            ? <>Preferência salva neste navegador. <button className="text-button inline" onClick={followSystem}>Voltar a seguir o sistema</button></>
+            : <>Seguindo o tema do seu sistema ({theme === "dark" ? "escuro" : "claro"}). Escolha acima para fixar.</>}</p>
+
+          <h3>Aplicativo</h3>
+          {installed ? (
+            <div className="install-state"><Check size={16} /><span><strong>RPGcord instalado</strong><small>Abrindo em janela própria, sem a barra do navegador.</small></span></div>
+          ) : canInstall ? (
+            <button className="secondary-button full" onClick={() => void install()}><Download size={16} /> Instalar o RPGcord neste dispositivo</button>
+          ) : (
+            <p>Para instalar, use a opção <strong>Instalar aplicativo</strong> do seu navegador. No iPhone, use <strong>Compartilhar → Adicionar à Tela de Início</strong>.</p>
+          )}
         </section>
       </aside>
     </div>

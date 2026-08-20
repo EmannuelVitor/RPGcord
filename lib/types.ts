@@ -26,6 +26,8 @@ export type CampaignMember = {
   role: "gm" | "player";
   joinedAt?: number;
   lastSeenAt?: number;
+  /** Falso quando a aba foi fechada de forma limpa. */
+  present?: boolean;
 };
 
 export type Character = {
@@ -99,6 +101,8 @@ export type MapToken = {
   visionRadius?: number;
   locked?: boolean;
   lockedBy?: string;
+  /** Criatura visivel apenas para o mestre. */
+  hidden?: boolean;
   kind: "hero" | "monster";
 };
 
@@ -130,6 +134,7 @@ export type Scene = {
   mapUrl: string;
   revealUrl: string;
   gridSize: number;
+  gridEnabled?: boolean;
   mapFit?: MapFit;
   fogEnabled?: boolean;
   visionRadius?: number;

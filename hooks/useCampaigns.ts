@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  arrayRemove,
   collection,
   doc,
   onSnapshot,
@@ -135,6 +136,48 @@ export function useCampaigns(user: AppUser) {
     return result.campaignId;
   }, [selectCampaign, user.avatarUrl, user.name]);
 
+  /**
+   * Sai da campanha. As regras deixam o jogador retirar apenas o proprio id de
+   * memberIds; o pino e as notas saem no mesmo lote, enquanto a filiacao ainda
+   * vale, porque depois disso ele perde o acesso. A ficha fica guardada caso
+   * ele volte pelo mesmo convite.
+   */
+  const leaveCampaign = useCallback(async (campaignId: string) => {
+    if (!db) throw new Error("Firestore indisponível.");
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "campaigns", campaignId, "tokens", user.id));
+    batch.delete(doc(db, "campaigns", campaignId, "notes", user.id));
+    batch.delete(doc(db, "campaigns", campaignId, "members", user.id));
+    batch.update(doc(db, "campaigns", campaignId), { memberIds: arrayRemove(user.id) });
+    await batch.commit();
+    selectCampaign(undefined);
+  }, [selectCampaign, user.id]);
+
+  /** O mestre remove um jogador da mesa. */
+  const removeMember = useCallback(async (campaignId: string, memberId: string) => {
+    if (!db) throw new Error("Firestore indisponível.");
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "campaigns", campaignId, "tokens", memberId));
+    batch.delete(doc(db, "campaigns", campaignId, "members", memberId));
+    batch.update(doc(db, "campaigns", campaignId), { memberIds: arrayRemove(memberId) });
+    await batch.commit();
+  }, []);
+
+  /** Exclusao definitiva, incluindo as subcolecoes, pelo Admin SDK. */
+  const deleteCampaign = useCallback(async (campaignId: string) => {
+    const currentUser = auth?.currentUser;
+    if (!currentUser) throw new Error("Faça login novamente para excluir a campanha.");
+    const idToken = await currentUser.getIdToken();
+    const response = await fetch("/api/campaigns/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify({ campaignId }),
+    });
+    const result = (await response.json()) as { error?: string };
+    if (!response.ok) throw new Error(result.error ?? "Não foi possível excluir a campanha.");
+    selectCampaign(undefined);
+  }, [selectCampaign]);
+
   return useMemo(() => ({
     campaigns,
     activeCampaign: campaigns.find((campaign) => campaign.id === activeId),
@@ -143,5 +186,8 @@ export function useCampaigns(user: AppUser) {
     selectCampaign,
     createCampaign,
     joinCampaign,
-  }), [activeId, campaigns, createCampaign, error, joinCampaign, loading, selectCampaign]);
+    leaveCampaign,
+    removeMember,
+    deleteCampaign,
+  }), [activeId, campaigns, createCampaign, deleteCampaign, error, joinCampaign, leaveCampaign, loading, removeMember, selectCampaign]);
 }

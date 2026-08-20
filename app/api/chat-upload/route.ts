@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminAuth, getAdminFirestore } from "@/lib/firebase-admin";
 import { uploadChatImage } from "@/lib/google-drive";
+import { clientKey, rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,9 @@ function cleanFileName(name: string) {
 }
 
 export async function POST(request: Request) {
+  const limit = rateLimit(clientKey(request, "chat-upload"), 12, 60_000);
+  if (!limit.ok) return tooManyRequests(limit.retryAfter);
+
   try {
     const authorization = request.headers.get("authorization") ?? "";
     const idToken = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";

@@ -1,22 +1,24 @@
 "use client";
 
-import { Dices, Minus, Plus, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, Dices, Minus, Plus, ScrollText, Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
 import { characterNameOf, composeName } from "@/lib/display-name";
-import type { DiceRoll, DiceValidationMode, MapToken } from "@/lib/types";
+import { VALIDATION_LABELS } from "@/lib/dice";
+import { buildCharacterFields } from "@/lib/sheet-template";
+import type { Character, DiceRoll, DiceValidationMode, MapToken, SheetStatusValue, SheetTemplate } from "@/lib/types";
 
 type Props = {
   rolls: DiceRoll[];
   tokens?: MapToken[];
+  character: Character;
+  template: SheetTemplate;
+  hasCharacter: boolean;
+  playerName: string;
+  onOpenSheet: () => void;
   onRoll: (sides: number, modifier: number, quantity: number, validationMode: DiceValidationMode) => Promise<DiceRoll>;
 };
 
 const dice = [4, 6, 8, 10, 12, 20, 100];
-const validationLabels: Record<DiceValidationMode, string> = {
-  highest: "Pegar o maior dado",
-  lowest: "Pegar o menor dado",
-  sum: "Somar todos os dados",
-};
 
 function relativeTime(timestamp: number) {
   const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
@@ -25,8 +27,24 @@ function relativeTime(timestamp: number) {
   return `há ${minutes} min`;
 }
 
-export function DiceRoller({ rolls, tokens = [], onRoll }: Props) {
+export function DiceRoller({ rolls, tokens = [], character, template, hasCharacter, playerName, onOpenSheet, onRoll }: Props) {
   const nameOf = (roll: DiceRoll) => composeName(characterNameOf(roll.userId, tokens), roll.userName) || roll.userName;
+
+  // Todas as barras de status definidas no modelo da ficha, no valor atual.
+  const statusBars = useMemo(() => {
+    const values = buildCharacterFields(character, template);
+    return template.fields
+      .filter((field) => field.type === "status")
+      .map((field) => {
+        const raw = values[field.id];
+        const status: SheetStatusValue = raw && typeof raw === "object" ? raw as SheetStatusValue : { current: 0, max: 0 };
+        const percent = status.max > 0 ? Math.max(0, Math.min(100, (status.current / status.max) * 100)) : 0;
+        return { id: field.id, label: field.label, ...status, percent };
+      });
+  }, [character, template]);
+
+  const characterName = character.name.trim() || "Crie sua personagem";
+  const initials = characterName.split(/s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
   const [selected, setSelected] = useState(20);
   const [modifier, setModifier] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -44,6 +62,30 @@ export function DiceRoller({ rolls, tokens = [], onRoll }: Props) {
 
   return (
     <aside className="dice-card panel">
+      <section className={"dice-character" + (hasCharacter ? "" : " empty")}>
+        <div className="dice-character-head">
+          <span className="dice-portrait">{character.imageUrl ? <img src={character.imageUrl} alt="" /> : initials}</span>
+          <div>
+            <p className="eyebrow">Seu personagem</p>
+            <strong>{characterName}{hasCharacter ? <>{" "}<em>({playerName})</em></> : null}</strong>
+            <span>{hasCharacter
+              ? `${character.ancestry || "Sem ancestralidade"} · ${character.characterClass || "Sem classe"} ${character.level}`
+              : "Crie a ficha para gerar seu pino no mapa"}</span>
+          </div>
+          <button className="dice-sheet-button" onClick={onOpenSheet}><ScrollText size={14} /> {hasCharacter ? "Ficha" : "Criar"} <ArrowRight size={13} /></button>
+        </div>
+        {hasCharacter && statusBars.length > 0 ? (
+          <div className="dice-status-bars">
+            {statusBars.map((bar) => (
+              <div key={bar.id}>
+                <p><span>{bar.label}</span><b>{bar.current}/{bar.max}</b></p>
+                <i><em style={{ width: `${bar.percent}%` }} /></i>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
       <header className="panel-header dice-title">
         <div><p className="eyebrow">Oráculo</p><h2>Rolagem de dados</h2></div>
         <Dices size={21} />
@@ -96,7 +138,7 @@ export function DiceRoller({ rolls, tokens = [], onRoll }: Props) {
             <div className="roll-copy">
               <strong>{nameOf(roll)}</strong>
               <span>rolou {roll.quantity && roll.quantity > 1 ? `${roll.quantity}d${roll.sides}` : `d${roll.sides}`}{roll.modifier ? ` ${roll.modifier > 0 ? "+" : ""}${roll.modifier}` : ""}</span>
-              {roll.results && roll.results.length > 1 && <span className="roll-details">{validationLabels[roll.validationMode ?? "sum"]}: [{roll.results.join(", ")}]</span>}
+              <span className="roll-details">{VALIDATION_LABELS[roll.validationMode ?? "sum"]}{roll.results && roll.results.length > 1 ? `: [${roll.results.join(", ")}]` : ""}</span>
             </div>
             <div className="roll-result">
               <strong>{roll.total}</strong>

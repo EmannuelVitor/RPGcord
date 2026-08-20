@@ -13,6 +13,12 @@ firebase-debug.log
 
 .vercel
 .env*
+!.env.example
+
+# Laboratorio local de componentes, fora do build publicado
+app/lab/
+public/lab-map.svg
+public/fog-lab.html
 
 # Ferramentas de IA / ambiente local do agente
 .claude/

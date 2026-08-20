@@ -5,6 +5,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   limit,
   onSnapshot,
   orderBy,
@@ -13,11 +14,12 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { db, isFirebaseConfigured } from "@/lib/firebase";
 import { DEFAULT_SHEET_TEMPLATE, normalizeSheetTemplate } from "@/lib/sheet-template";
-import type { AppUser, CampaignJournal, CampaignMember, CampaignMusic, Character, CharacterNotes, ChatMessage, DiceRoll, DiceValidationMode, LightSource, MapToken, Scene, SheetTemplate } from "@/lib/types";
+import type { AppUser, CampaignJournal, CampaignMember, CampaignMusic, Character, CharacterNotes, ChatMessage, DiceRoll, DiceValidationMode, FogArea, LightSource, MapToken, Scene, SheetTemplate } from "@/lib/types";
 
 function blankCharacter(user: AppUser): Character {
   return {
@@ -52,6 +54,22 @@ const initialScene: Scene = {
   dynamicLights: [],
 };
 
+/** Teto de areas reveladas guardadas na cena. */
+const MAX_REVEALED_AREAS = 240;
+
+/**
+ * Descarta revelacoes praticamente sobrepostas antes de aplicar o teto. Pintar
+ * a nevoa com cliques repetidos gerava dezenas de circulos no mesmo ponto, e o
+ * corte cego em 60 apagava areas antigas sem o mestre perceber.
+ */
+function mergeRevealed(areas: FogArea[], next: FogArea) {
+  const kept = areas.filter((area) => {
+    const distance = Math.hypot(area.x - next.x, area.y - next.y);
+    return distance > Math.min(area.radius, next.radius) * .45 || area.radius > next.radius;
+  });
+  return [...kept, next].slice(-MAX_REVEALED_AREAS);
+}
+
 const initialJournal: CampaignJournal = { content: "" };
 const initialMusic: CampaignMusic = { youtubeUrl: "", title: "", loop: false, playing: false, position: 0 };
 const initialNotes: CharacterNotes = { content: "", shareWithGM: false, sharedWithPlayerIds: [] };
@@ -79,6 +97,10 @@ export function useGameSession(campaignId: string, user: AppUser) {
   const [notes, setNotes] = useState<CharacterNotes>(initialNotes);
   const [participants, setParticipants] = useState<CampaignMember[]>([]);
   const [gmId, setGmId] = useState("");
+  // Espelha a cena para que as acoes rapidas do mapa nao leiam um valor velho
+  // capturado no fechamento do callback.
+  const sceneRef = useRef(scene);
+  sceneRef.current = scene;
   const [syncError, setSyncError] = useState<string>();
   const online = isFirebaseConfigured && Boolean(db);
 
@@ -180,7 +202,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
       () => setSyncError("O chat da sessão não pôde ser sincronizado."),
     );
     const unsubscribeWhispers = onSnapshot(
-      query(collection(db, "campaigns", campaignId, "whispers"), where("participantIds", "array-contains", user.id), limit(100)),
+      query(collection(db, "campaigns", campaignId, "whispers"), where("participantIds", "array-contains", user.id), orderBy("createdAt", "desc"), limit(100)),
       (snapshot) => setWhisperMessages(snapshot.docs.map((item) => ({
         id: item.id,
         ...item.data(),
@@ -307,48 +329,48 @@ export function useGameSession(campaignId: string, user: AppUser) {
     if (online && db) await setDoc(doc(db, "campaigns", campaignId, "scenes", "active"), next);
   }, [campaignId, online]);
 
+  /**
+   * Grava so os campos alterados da cena. Revelar nevoa e arrastar luzes
+   * reescreviam o documento inteiro a cada clique, inclusive todas as luzes.
+   */
+  const patchScene = useCallback(async (patch: Partial<Scene>) => {
+    setScene((current) => ({ ...current, ...patch }));
+    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "scenes", "active"), patch, { merge: true });
+  }, [campaignId, online]);
+
   const revealArea = useCallback(async (x: number, y: number) => {
-    const next: Scene = {
-      ...scene,
-      revealedAreas: [...(scene.revealedAreas ?? []), {
-        id: crypto.randomUUID(),
-        x,
-        y,
-        radius: scene.visionRadius ?? 14,
-      }].slice(-60),
-    };
-    await saveScene(next);
-  }, [saveScene, scene]);
+    const current = sceneRef.current;
+    const area: FogArea = { id: crypto.randomUUID(), x, y, radius: current.visionRadius ?? 14 };
+    await patchScene({ revealedAreas: mergeRevealed(current.revealedAreas ?? [], area) });
+  }, [patchScene]);
 
   const clearRevealed = useCallback(async () => {
-    await saveScene({ ...scene, revealedAreas: [] });
-  }, [saveScene, scene]);
+    await patchScene({ revealedAreas: [] });
+  }, [patchScene]);
 
   const moveLight = useCallback(async (lightId: string, x: number, y: number) => {
-    await saveScene({
-      ...scene,
-      dynamicLights: (scene.dynamicLights ?? []).map((light) => light.id === lightId ? { ...light, x, y } : light),
+    await patchScene({
+      dynamicLights: (sceneRef.current.dynamicLights ?? []).map((light) => light.id === lightId ? { ...light, x, y } : light),
     });
-  }, [saveScene, scene]);
+  }, [patchScene]);
 
   const createLight = useCallback(async (light: LightSource) => {
-    await saveScene({ ...scene, dynamicLights: [...(scene.dynamicLights ?? []), normalizeLight(light)] });
-  }, [saveScene, scene]);
+    await patchScene({ dynamicLights: [...(sceneRef.current.dynamicLights ?? []), normalizeLight(light)] });
+  }, [patchScene]);
 
   const updateLight = useCallback(async (light: LightSource) => {
-    await saveScene({
-      ...scene,
-      dynamicLights: (scene.dynamicLights ?? []).map((item) => item.id === light.id ? normalizeLight(light) : item),
+    await patchScene({
+      dynamicLights: (sceneRef.current.dynamicLights ?? []).map((item) => item.id === light.id ? normalizeLight(light) : item),
     });
-  }, [saveScene, scene]);
+  }, [patchScene]);
 
   const deleteLight = useCallback(async (lightId: string) => {
-    await saveScene({ ...scene, dynamicLights: (scene.dynamicLights ?? []).filter((light) => light.id !== lightId) });
-  }, [saveScene, scene]);
+    await patchScene({ dynamicLights: (sceneRef.current.dynamicLights ?? []).filter((light) => light.id !== lightId) });
+  }, [patchScene]);
 
   const setGlobalVision = useCallback(async (radius: number) => {
-    await saveScene({ ...scene, visionRadius: Math.max(3, Math.min(45, radius)) });
-  }, [saveScene, scene]);
+    await patchScene({ visionRadius: Math.max(3, Math.min(45, radius)) });
+  }, [patchScene]);
 
   const setTokenVision = useCallback(async (tokenId: string, radius?: number) => {
     const normalized = radius == null ? null : Math.max(3, Math.min(45, radius));
@@ -417,11 +439,21 @@ export function useGameSession(campaignId: string, user: AppUser) {
   }, [campaignId, music, online]);
 
   const clearChat = useCallback(async () => {
-    const current = chatMessages;
     setChatMessages([]);
     const firestore = db;
-    if (online && firestore) await Promise.all(current.map((message) => deleteDoc(doc(firestore, "campaigns", campaignId, "chatMessages", message.id))));
-  }, [campaignId, chatMessages, online]);
+    if (!online || !firestore) return;
+    // Percorre a colecao inteira: apagar apenas as mensagens carregadas deixava
+    // o resto no banco, e elas reapareciam na proxima consulta.
+    const messages = collection(firestore, "campaigns", campaignId, "chatMessages");
+    for (;;) {
+      const page = await getDocs(query(messages, limit(400)));
+      if (page.empty) return;
+      const batch = writeBatch(firestore);
+      page.docs.forEach((item) => batch.delete(item.ref));
+      await batch.commit();
+      if (page.size < 400) return;
+    }
+  }, [campaignId, online]);
 
   return useMemo(() => ({
     character, hasCharacter, rolls, tokens, scene, journal, music, sheetTemplate, chatMessages, whisperMessages, notes, participants, isGM: gmId === user.id, online, syncError,

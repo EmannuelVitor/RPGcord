@@ -226,8 +226,8 @@ export function useGameSession(campaignId: string, user: AppUser) {
     const unsubscribeMembers = onSnapshot(
       collection(db, "campaigns", campaignId, "members"),
       (snapshot) => setParticipants(snapshot.docs.map((item) => ({
-        userId: item.id,
         ...item.data(),
+        userId: item.id,
         present: item.data().present !== false,
         lastSeenAt: item.data().lastSeenAt?.toMillis?.() ?? undefined,
         joinedAt: item.data().joinedAt?.toMillis?.() ?? undefined,
@@ -589,10 +589,11 @@ export function useGameSession(campaignId: string, user: AppUser) {
   }, [campaignId, online]);
 
   const saveInitiative = useCallback(async (nextInitiative: InitiativeState) => {
+    const entries = nextInitiative.entries.slice(0, 100).map((entry) => ({ ...entry, name: entry.name.trim().slice(0, 80), initiative: Math.round(entry.initiative) }));
     const saved = {
       ...nextInitiative,
-      entries: nextInitiative.entries.slice(0, 100).map((entry) => ({ ...entry, name: entry.name.trim().slice(0, 80), initiative: Math.round(entry.initiative) })),
-      activeIndex: Math.max(-1, Math.min(nextInitiative.activeIndex, nextInitiative.entries.length - 1)),
+      entries,
+      activeIndex: Math.max(-1, Math.min(nextInitiative.activeIndex, entries.length - 1)),
       round: Math.max(0, Math.round(nextInitiative.round)),
       updatedAt: Date.now(),
     };

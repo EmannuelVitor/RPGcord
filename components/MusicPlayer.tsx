@@ -42,7 +42,10 @@ function loadYouTubeApi() {
   if (window.YT?.Player) return Promise.resolve(window.YT);
   if (youtubeApiPromise) return youtubeApiPromise;
   youtubeApiPromise = new Promise<YTApi>((resolve, reject) => {
-    const timeout = window.setTimeout(() => reject(new Error("O YouTube demorou demais para responder.")), 15000);
+    const timeout = window.setTimeout(() => {
+      youtubeApiPromise = undefined;
+      reject(new Error("O YouTube demorou demais para responder."));
+    }, 15000);
     const previous = window.onYouTubeIframeAPIReady;
     window.onYouTubeIframeAPIReady = () => {
       previous?.();

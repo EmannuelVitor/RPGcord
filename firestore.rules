@@ -80,9 +80,19 @@ service cloud.firestore {
       match /members/{memberId} {
         allow read: if isMember(campaignId);
         allow create: if isMemberAfter(campaignId)
-          && (memberId == request.auth.uid || isOwnerAfter(campaignId));
+          && request.resource.data.userId == memberId
+          && ((memberId == request.auth.uid && request.resource.data.role == 'player')
+            || (isOwnerAfter(campaignId) && request.resource.data.role in ['gm', 'player']));
+        allow update: if isOwner(campaignId)
+          && request.resource.data.userId == memberId;
         allow update: if isMember(campaignId)
-          && (memberId == request.auth.uid || isOwner(campaignId));
+          && memberId == request.auth.uid
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'name', 'avatarUrl', 'present', 'lastSeenAt',
+            'typingConversationId', 'typingAt', 'characterId'
+          ]);
         // O mestre remove quem quiser; cada jogador pode remover a si mesmo.
         allow delete: if signedIn()
           && (memberId == request.auth.uid || isOwner(campaignId));

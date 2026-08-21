@@ -19,12 +19,21 @@ Produção: <https://rpgcord.vercel.app>
 - névoa de guerra com visão compartilhada ou individual, áreas reveladas pelo
   mestre e fontes de luz com raio intenso, raio difuso, cor e intensidade;
 - pré-visualização ao vivo da luz enquanto ela é ajustada;
+- assets de cenário em camadas, com posição, rotação, bloqueio, ocultação manual
+  e integração opcional à névoa de guerra;
 - pinos identificados como `Personagem (Jogador)`, com seletor de exibição;
-- limite opcional de movimento para os jogadores.
+- limite opcional de movimento para os jogadores;
+- presença por cena: o Mestre pode ocultar temporariamente o mapa e o pino de
+  um jogador sem removê-lo da campanha ou interromper chat, ficha e dados.
 
 **Personagem e jogo**
 - modelo de ficha editável pelo mestre, com campos de texto, número, status,
   contador, caixa de seleção e texto rico;
+- registro extensível de sistemas, aplicação de modelos e importação/exportação
+  de fichas estruturadas em JSON;
+- catálogo privado de NPCs com fichas narrativas simplificadas;
+- fichas de criaturas vinculadas ao combate, com nível, vida, atributos,
+  fraquezas e habilidades revelados individualmente pelo Mestre;
 - dados d4 a d100 com quantidade, modificador e modo de validação;
 - chat da sessão com imagens e spoilers, sussurros privados em abas separadas,
   diário da campanha e bloco de notas por personagem;
@@ -80,7 +89,10 @@ campaigns/{campaignId}
   members/{userId}        nome, avatar, papel, presença
   characters/{userId}     ficha completa
   tokens/{tokenId}        pinos de heróis e criaturas
-  scenes/active           mapa, névoa, luzes, limites de movimento
+  monsterSheets/{tokenId} ficha completa da criatura, privada do Mestre
+  assets/{assetId}        imagens posicionáveis e camadas do mapa
+  npcs/{npcId}            catálogo privado de personagens não jogáveis
+  scenes/active           mapa, névoa, luzes, limites e presença por cena
   dicerolls/{rollId}      histórico de rolagens
   chatMessages/{id}       chat geral da campanha
   whispers/{id}           conversas privadas, filtradas por participantIds
@@ -93,6 +105,11 @@ campaignInvites/{codigo}  código de convite → campanha
 
 O dono da campanha (`ownerId`) é o Mestre; o papel é resolvido pelo documento da
 campanha, não por variável de ambiente.
+
+O registro de fichas já aceita novos sistemas sem mudanças no editor. O modelo
+`RPGcord Universal` acompanha o projeto; modelos oficiais adicionais devem ser
+registrados somente após o fornecimento e a validação dos respectivos PDFs e
+arquivos estruturados, evitando inventar campos ou regras do sistema.
 
 ## 3. Discord Activity
 
@@ -128,6 +145,9 @@ branch sobem sem configuração. Nunca prefixe `DISCORD_CLIENT_SECRET`,
 As regras em `firestore.rules` exigem Firebase Auth em todas as operações.
 Jogadores alteram apenas a própria ficha, os próprios pinos e as próprias notas;
 apenas o Mestre altera cenas, criaturas, diário, trilha e o modelo de ficha.
-Sussurros só são legíveis por quem participa da conversa. As rotas de API têm
+Assets ocultos e fichas completas de criaturas não são entregues aos jogadores;
+o pino público contém apenas os campos que o Mestre revelou. NPCs também são
+legíveis somente pelo dono da campanha. Sussurros só são legíveis por quem
+participa da conversa. As rotas de API têm
 limite de requisições por IP, que é por instância e não substitui um limite
 compartilhado. Não use regras globais `allow read, write: if true` em produção.

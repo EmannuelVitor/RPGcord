@@ -1,15 +1,19 @@
 "use client";
 
-import { Eye, EyeOff, Lightbulb, Map, Moon, Plus, Save, ScrollText, Trash2, X } from "lucide-react";
+import { Boxes, ChevronDown, Eye, EyeOff, Lightbulb, Map, Moon, Plus, Save, ScrollText, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
+import { MapAssetManager } from "@/components/MapAssetManager";
+import { MonsterSheetEditor } from "@/components/MonsterSheets";
 import { toDirectDriveUrl } from "@/lib/drive";
+import { DEFAULT_MONSTER_SHEET } from "@/lib/monster-sheet";
 import { SheetTemplateEditor } from "@/components/SheetTemplateEditor";
-import type { MapToken, Scene, SheetTemplate } from "@/lib/types";
+import type { MapAsset, MapToken, MonsterSheet, Scene, SheetTemplate } from "@/lib/types";
 
 type Props = {
   campaignId: string;
   scene: Scene;
   tokens: MapToken[];
+  assets: MapAsset[];
   sheetTemplate: SheetTemplate;
   ownerId: string;
   onSaveScene: (scene: Scene) => Promise<void>;
@@ -17,16 +21,20 @@ type Props = {
   onAddToken: (token: MapToken) => Promise<void>;
   onRemoveToken: (id: string) => Promise<void>;
   onSetTokenHidden: (id: string, hidden: boolean) => Promise<void>;
+  onUpdateMonsterSheet: (id: string, sheet: MonsterSheet) => Promise<void>;
+  onSaveAsset: (asset: MapAsset) => Promise<void>;
+  onDeleteAsset: (id: string) => Promise<void>;
   embedded?: boolean;
   onClose: () => void;
 };
 
-export function GameMasterPanel({ campaignId, scene, tokens, sheetTemplate, ownerId, embedded = false, onSaveScene, onSaveSheetTemplate, onAddToken, onRemoveToken, onSetTokenHidden, onClose }: Props) {
+export function GameMasterPanel({ campaignId, scene, tokens, assets, sheetTemplate, ownerId, embedded = false, onSaveScene, onSaveSheetTemplate, onAddToken, onRemoveToken, onSetTokenHidden, onUpdateMonsterSheet, onSaveAsset, onDeleteAsset, onClose }: Props) {
   const [draft, setDraft] = useState(scene);
   const [tokenName, setTokenName] = useState("");
   const [tokenImage, setTokenImage] = useState("");
   const [newLightDim, setNewLightDim] = useState(16);
   const [newLightBright, setNewLightBright] = useState(8);
+  const [expandedMonsterId, setExpandedMonsterId] = useState<string>();
 
   useEffect(() => setDraft(scene), [scene]);
 
@@ -76,7 +84,8 @@ export function GameMasterPanel({ campaignId, scene, tokens, sheetTemplate, owne
     const token: MapToken = {
       id: crypto.randomUUID(), ownerId, name: tokenName.trim(),
       initials: tokenName.trim().split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
-      x: 50, y: 40, color: "#b75252", imageUrl: toDirectDriveUrl(tokenImage, campaignId), kind: "monster",
+      x: 50, y: 40, color: "#b75252", imageUrl: toDirectDriveUrl(tokenImage, campaignId), kind: "monster", hidden: false,
+      monsterSheet: { ...DEFAULT_MONSTER_SHEET, attributes: [], weaknesses: [], abilities: [], revealedFields: [] },
     };
     await onAddToken(token);
     setTokenName("");
@@ -138,6 +147,11 @@ export function GameMasterPanel({ campaignId, scene, tokens, sheetTemplate, owne
         <section className="gm-section"><h3><Eye size={17} /> Revelação aos jogadores</h3><label>Imagem de monstro ou pista<input placeholder="Link do Google Drive" value={draft.revealUrl} onChange={(event) => setDraft({ ...draft, revealUrl: event.target.value })} /></label></section>
       </form>
 
+      <section className="gm-section">
+        <h3><Boxes size={17} /> Assets personalizados do mapa</h3>
+        <MapAssetManager campaignId={campaignId} assets={assets} onSave={onSaveAsset} onDelete={onDeleteAsset} />
+      </section>
+
       <section className="gm-section sheet-model-section"><h3><ScrollText size={17} /> Modelo de ficha da campanha</h3><SheetTemplateEditor template={sheetTemplate} onSave={onSaveSheetTemplate} /></section>
 
       <section className="gm-section">
@@ -146,7 +160,10 @@ export function GameMasterPanel({ campaignId, scene, tokens, sheetTemplate, owne
         <label>Imagem opcional<input placeholder="Link do Google Drive" value={tokenImage} onChange={(event) => setTokenImage(event.target.value)} /></label>
         <button className="secondary-button full" onClick={() => void createToken()}><Plus size={16} /> Colocar no mapa</button>
 <p className="field-help">Criaturas ocultas aparecem só para você, esmaecidas no mapa. Revele-as quando o grupo encontrá-las.</p>
-        <div className="token-list">{tokens.filter((token) => token.kind === "monster").map((token) => <div key={token.id}><span className="mini-token" style={{ background: token.color }}>{token.initials}</span><strong>{token.name}</strong><button className={token.hidden ? "token-hidden-toggle active" : "token-hidden-toggle"} onClick={() => void onSetTokenHidden(token.id, !token.hidden)} title={token.hidden ? "Revelar para os jogadores" : "Ocultar dos jogadores"} aria-label={(token.hidden ? "Revelar " : "Ocultar ") + token.name}>{token.hidden ? <EyeOff size={15} /> : <Eye size={15} />}</button><button onClick={() => onRemoveToken(token.id)} aria-label={"Remover " + token.name}><Trash2 size={15} /></button></div>)}</div>
+        <div className="token-list monster-token-list">{tokens.filter((token) => token.kind === "monster").map((token) => <article className={expandedMonsterId === token.id ? "expanded" : ""} key={token.id}>
+          <div className="monster-token-summary"><span className="mini-token" style={{ background: token.color }}>{token.imageUrl ? <img src={token.imageUrl} alt="" /> : token.initials}</span><strong>{token.name}</strong><button className="monster-sheet-toggle" type="button" onClick={() => setExpandedMonsterId((current) => current === token.id ? undefined : token.id)} aria-expanded={expandedMonsterId === token.id} aria-label={`Editar ficha de ${token.name}`}><ChevronDown size={15} /></button><button className={token.hidden ? "token-hidden-toggle active" : "token-hidden-toggle"} type="button" onClick={() => void onSetTokenHidden(token.id, !token.hidden)} title={token.hidden ? "Revelar para os jogadores" : "Ocultar dos jogadores"} aria-label={(token.hidden ? "Revelar " : "Ocultar ") + token.name}>{token.hidden ? <EyeOff size={15} /> : <Eye size={15} />}</button><button type="button" onClick={() => { setExpandedMonsterId((current) => current === token.id ? undefined : current); void onRemoveToken(token.id); }} aria-label={"Remover " + token.name}><Trash2 size={15} /></button></div>
+          {expandedMonsterId === token.id ? <MonsterSheetEditor token={token} onSave={(sheet) => onUpdateMonsterSheet(token.id, sheet)} /> : null}
+        </article>)}</div>
       </section>
     </aside>
   </div>;

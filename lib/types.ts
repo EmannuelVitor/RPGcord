@@ -75,6 +75,11 @@ export type SheetTemplate = {
   id: string;
   name: string;
   version: number;
+  /** Identificador estável do sistema de origem; "custom" representa um modelo livre. */
+  systemId?: string;
+  systemName?: string;
+  /** Referência opcional ao PDF oficial quando o material for fornecido. */
+  sourcePdfUrl?: string;
   fields: SheetFieldDefinition[];
   updatedAt?: number;
 };
@@ -112,6 +117,46 @@ export type MapToken = {
   /** Criatura visivel apenas para o mestre. */
   hidden?: boolean;
   kind: "hero" | "monster";
+  monsterSheet?: MonsterSheet;
+};
+
+export type MonsterDetailKind = "attribute" | "weakness" | "ability";
+
+export type MonsterDetail = {
+  id: string;
+  label: string;
+  value: string;
+};
+
+export type MonsterSheet = {
+  level: number;
+  hp: number;
+  maxHp: number;
+  attributes: MonsterDetail[];
+  weaknesses: MonsterDetail[];
+  abilities: MonsterDetail[];
+  /** Chaves reveladas: level, health ou <categoria>:<id>. */
+  revealedFields: string[];
+};
+
+export type MapAssetKind = "scenery" | "loot" | "trap" | "other";
+
+export type MapAsset = {
+  id: string;
+  name: string;
+  imageUrl: string;
+  kind: MapAssetKind;
+  x: number;
+  y: number;
+  width: number;
+  rotation: number;
+  layer: number;
+  hidden: boolean;
+  /** Quando verdadeiro, a camada de névoa é desenhada por cima do asset. */
+  fogAffected: boolean;
+  locked?: boolean;
+  createdAt?: number;
+  updatedAt?: number;
 };
 
 export type MapFit = "contain" | "cover" | "stretch";
@@ -157,6 +202,24 @@ export type Scene = {
     bottom: number;
   };
   dynamicLights?: LightSource[];
+  /** Jogadores fora desta cena continuam conectados à campanha. */
+  excludedUserIds?: string[];
+};
+
+export type NpcRecord = {
+  id: string;
+  name: string;
+  role: string;
+  location: string;
+  description: string;
+  appearance: string;
+  personality: string;
+  goals: string;
+  notes: string;
+  imageUrl?: string;
+  tags: string[];
+  createdAt?: number;
+  updatedAt?: number;
 };
 
 export type ChatMessage = {

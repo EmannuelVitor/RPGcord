@@ -23,6 +23,7 @@ import {
   Swords,
   UserPlus,
   Users,
+  UsersRound,
   Wifi,
   X,
 } from "lucide-react";
@@ -42,6 +43,7 @@ import { InviteDialog } from "@/components/InviteDialog";
 import { InitiativeTracker } from "@/components/InitiativeTracker";
 import { MusicPanel } from "@/components/MusicPanel";
 import { MusicPlayer } from "@/components/MusicPlayer";
+import { NpcManager } from "@/components/NpcManager";
 import { ParticipantsPopover } from "@/components/ParticipantsPopover";
 import { PlayerNotes } from "@/components/PlayerNotes";
 import { SessionChat } from "@/components/SessionChat";
@@ -50,9 +52,10 @@ import { SettingsPanel } from "@/components/SettingsPanel";
 import { useGameSession } from "@/hooks/useGameSession";
 import { useResizablePanels } from "@/hooks/useResizablePanels";
 import { characterNameOf, composeName, isOnline } from "@/lib/display-name";
+import { isUserInScene } from "@/lib/scene-presence";
 import type { AppUser, Campaign, CampaignMember } from "@/lib/types";
 
-type PanelKey = "sheet" | "history" | "chat" | "journal" | "notes" | "initiative" | "settings" | "gm";
+type PanelKey = "sheet" | "history" | "chat" | "journal" | "notes" | "initiative" | "npcs" | "settings" | "gm";
 type WhisperTabKey = `whisper:${string}`;
 type WorkspaceTabKey = PanelKey | WhisperTabKey;
 
@@ -71,6 +74,7 @@ const panelLabels: Record<PanelKey, string> = {
   journal: "Diário",
   notes: "Notas",
   initiative: "Iniciativa",
+  npcs: "NPCs",
   settings: "Configurações",
   gm: "Mestre",
 };
@@ -82,6 +86,7 @@ const panelIcons: Record<PanelKey, typeof ScrollText> = {
   journal: BookOpen,
   notes: NotebookPen,
   initiative: Swords,
+  npcs: UsersRound,
   settings: Settings,
   gm: Crown,
 };
@@ -244,6 +249,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
   }, [activeTab, closePanel, detailsOpen, inviteOpen, musicOpen, participantsOpen, revealOpen, sidebarOpen]));
   const onlineCount = game.participants.filter((member) => isOnline(member)).length;
   const totalUnread = unreadChat + Object.values(unreadWhispers).reduce((total, count) => total + count, 0);
+  const hasSceneAccess = game.isGM || isUserInScene(user.id, game.scene.excludedUserIds);
 
   function getWhisperPartner(partnerId: string): CampaignMember | undefined {
     const participant = game.participants.find((member) => member.userId === partnerId);
@@ -277,9 +283,10 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
     if (panel === "chat") return <SessionChat embedded campaignId={campaign.id} campaignName={campaign.name} user={user} messages={game.chatMessages} whispers={game.whisperMessages} participants={game.participants} tokens={game.tokens} isGM={game.isGM} onSend={game.sendChatMessage} onEdit={game.editChatMessage} onDelete={game.deleteChatMessage} onTyping={game.setTyping} onOpenWhisper={openWhisper} onClear={game.clearChat} onClose={() => closePanel("chat")} />;
     if (panel === "journal") return <CampaignJournal embedded journal={game.journal} isGM={game.isGM} onSave={game.saveJournal} onClose={() => closePanel("journal")} />;
     if (panel === "notes") return <PlayerNotes embedded notes={game.notes} participants={game.participants} userId={user.id} onSave={game.saveNotes} onClose={() => closePanel("notes")} />;
-    if (panel === "initiative") return <InitiativeTracker embedded initiative={game.initiative} tokens={game.tokens} isGM={game.isGM} onSave={game.saveInitiative} onClose={() => closePanel("initiative")} />;
+    if (panel === "initiative") return <InitiativeTracker embedded initiative={game.initiative} tokens={game.tokens} isGM={game.isGM} onSave={game.saveInitiative} onUpdateMonsterSheet={game.updateMonsterSheet} onClose={() => closePanel("initiative")} />;
+    if (panel === "npcs" && game.isGM) return <NpcManager embedded campaignId={campaign.id} npcs={game.npcs} onSave={game.saveNpc} onDelete={game.deleteNpc} onClose={() => closePanel("npcs")} />;
     if (panel === "settings") return <SettingsPanel embedded appearance={appearance} onClose={() => closePanel("settings")} />;
-    if (panel === "gm" && game.isGM) return <GameMasterPanel embedded campaignId={campaign.id} scene={game.scene} tokens={game.tokens} sheetTemplate={game.sheetTemplate} ownerId={user.id} onSaveScene={game.saveScene} onSaveSheetTemplate={game.saveSheetTemplate} onAddToken={game.addToken} onRemoveToken={game.removeToken} onSetTokenHidden={game.setTokenHidden} onClose={() => closePanel("gm")} />;
+    if (panel === "gm" && game.isGM) return <GameMasterPanel embedded campaignId={campaign.id} scene={game.scene} tokens={game.tokens} assets={game.assets} sheetTemplate={game.sheetTemplate} ownerId={user.id} onSaveScene={game.saveScene} onSaveSheetTemplate={game.saveSheetTemplate} onAddToken={game.addToken} onRemoveToken={game.removeToken} onSetTokenHidden={game.setTokenHidden} onUpdateMonsterSheet={game.updateMonsterSheet} onSaveAsset={game.saveAsset} onDeleteAsset={game.deleteAsset} onClose={() => closePanel("gm")} />;
     return null;
   }
 
@@ -298,7 +305,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
           <button onClick={() => openPanel("chat")}><MessageCircle /> Chat da sessão {totalUnread > 0 ? <span>{totalUnread}</span> : null}</button>
           <button onClick={openMusic}><Music2 /> Música da campanha</button>
           <p className="nav-group">Combate</p><button onClick={() => openPanel("initiative")}><Swords /> Iniciativa</button>
-          {game.isGM ? <><p className="nav-group">Mestre</p><button onClick={() => openPanel("gm")}><Crown /> Preparar cena</button><button onClick={() => { setInviteOpen(true); setSidebarOpen(false); }}><UserPlus /> Convidar jogadores</button></> : null}
+          {game.isGM ? <><p className="nav-group">Mestre</p><button onClick={() => openPanel("gm")}><Crown /> Preparar cena</button><button onClick={() => openPanel("npcs")}><UsersRound /> Gerenciar NPCs</button><button onClick={() => { setInviteOpen(true); setSidebarOpen(false); }}><UserPlus /> Convidar jogadores</button></> : null}
         </nav>
         <div className="sidebar-bottom">
           <button onClick={onTutorial}><HelpCircle /> Ajuda</button><button onClick={() => openPanel("settings")}><Settings /> Configurações</button>
@@ -321,7 +328,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
             {game.scene.revealUrl ? <button className="outline-button reveal-top" onClick={() => setRevealOpen(true)} title="Ver a imagem revelada pelo mestre"><Sparkles size={16} /> Revelação</button> : null}
             <button className="outline-button back-home-button" onClick={onCampaigns}><ArrowLeft size={16} /> Voltar ao início</button>
           </div>
-          {participantsOpen ? <ParticipantsPopover members={game.participants} characters={game.characters} tokens={game.tokens} currentUserId={user.id} ownerId={campaign.ownerId} isGM={game.isGM} onAssignCharacter={game.assignCharacter} onRemove={async (memberId) => { await game.assignCharacter(memberId, undefined); await onRemoveMember(campaign.id, memberId); }} onClose={() => setParticipantsOpen(false)} /> : null}
+          {participantsOpen ? <ParticipantsPopover members={game.participants} characters={game.characters} tokens={game.tokens} currentUserId={user.id} ownerId={campaign.ownerId} isGM={game.isGM} excludedUserIds={game.scene.excludedUserIds} onAssignCharacter={game.assignCharacter} onSetScenePresence={game.setPlayerScenePresence} onRemove={async (memberId) => { await game.assignCharacter(memberId, undefined); await onRemoveMember(campaign.id, memberId); }} onClose={() => setParticipantsOpen(false)} /> : null}
         </header>
 
         {(game.syncError || (!game.hasCharacter && !game.isGM)) ? (
@@ -331,7 +338,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
         ) : null}
 
         <div className="content-grid">
-          <SectionErrorBoundary title="O mapa não pôde ser exibido"><Battlemap scene={game.scene} tokens={game.tokens} participants={game.participants} userId={user.id} isGM={game.isGM} hasCharacter={game.hasCharacter || game.isGM} onMove={game.moveToken} onToggleTokenLock={game.toggleTokenLock} onRequestCharacter={() => openPanel("sheet")} onClearRevealed={game.clearRevealed} onCommitRevealed={game.commitRevealed} onMoveLight={game.moveLight} onCreateLight={game.createLight} onUpdateLight={game.updateLight} onDeleteLight={game.deleteLight} onSetGlobalVision={game.setGlobalVision} onSetTokenVision={game.setTokenVision} /></SectionErrorBoundary>
+          <SectionErrorBoundary title="O mapa não pôde ser exibido"><Battlemap scene={game.scene} tokens={game.tokens} assets={game.assets} participants={game.participants} userId={user.id} isGM={game.isGM} hasCharacter={game.hasCharacter || game.isGM} hasSceneAccess={hasSceneAccess} onMove={game.moveToken} onMoveAsset={game.moveAsset} onToggleTokenLock={game.toggleTokenLock} onRequestCharacter={() => openPanel("sheet")} onClearRevealed={game.clearRevealed} onCommitRevealed={game.commitRevealed} onMoveLight={game.moveLight} onCreateLight={game.createLight} onUpdateLight={game.updateLight} onDeleteLight={game.deleteLight} onSetGlobalVision={game.setGlobalVision} onSetTokenVision={game.setTokenVision} /></SectionErrorBoundary>
           <SectionErrorBoundary title="O oráculo de dados não pôde ser exibido"><DiceRoller rolls={game.rolls} tokens={game.tokens} character={game.character} template={game.sheetTemplate} hasCharacter={game.hasCharacter} playerName={user.name} onOpenSheet={() => openPanel("sheet")} onRoll={game.rollDie} /></SectionErrorBoundary>
         </div>
 

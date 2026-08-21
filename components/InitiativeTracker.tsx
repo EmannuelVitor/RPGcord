@@ -2,7 +2,8 @@
 
 import { ChevronLeft, ChevronRight, Dices, Plus, RotateCcw, Swords, Trash2, X } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
-import type { InitiativeEntry, InitiativeState, MapToken } from "@/lib/types";
+import { MonsterCombatCards } from "@/components/MonsterSheets";
+import type { InitiativeEntry, InitiativeState, MapToken, MonsterSheet } from "@/lib/types";
 import { advanceInitiative, orderInitiative } from "@/lib/initiative";
 
 type Props = {
@@ -11,10 +12,11 @@ type Props = {
   isGM: boolean;
   embedded?: boolean;
   onSave: (initiative: InitiativeState) => Promise<void>;
+  onUpdateMonsterSheet?: (tokenId: string, sheet: MonsterSheet) => Promise<void>;
   onClose: () => void;
 };
 
-export function InitiativeTracker({ initiative, tokens, isGM, embedded = false, onSave, onClose }: Props) {
+export function InitiativeTracker({ initiative, tokens, isGM, embedded = false, onSave, onUpdateMonsterSheet, onClose }: Props) {
   const [selectedTokenId, setSelectedTokenId] = useState("");
   const [customName, setCustomName] = useState("");
   const [score, setScore] = useState(10);
@@ -92,6 +94,8 @@ export function InitiativeTracker({ initiative, tokens, isGM, embedded = false, 
               {isGM ? <button className="initiative-remove" onClick={() => removeEntry(entry.id)} aria-label={`Remover ${entry.name}`}><Trash2 size={13} /></button> : null}
             </li>;
           })}</ol> : <div className="initiative-empty"><Swords size={28} /><strong>Ninguém na ordem de iniciativa</strong><span>O mestre pode adicionar pinos ou participantes avulsos.</span></div>}
+
+          <MonsterCombatCards initiative={initiative} tokens={tokens} isGM={isGM} onSave={onUpdateMonsterSheet} />
 
           {error ? <p className="form-error">{error}</p> : null}
           {isGM ? <>

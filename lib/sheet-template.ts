@@ -1,11 +1,13 @@
 "use client";
 
-import type { Character, SheetFieldDefinition, SheetFieldValue, SheetStatusValue, SheetTemplate } from "@/lib/types";
+import type { Character, SheetCategory, SheetFieldDefinition, SheetFieldType, SheetFieldValue, SheetStatusValue, SheetTemplate } from "@/lib/types";
 
 export const DEFAULT_SHEET_TEMPLATE: SheetTemplate = {
   id: "current",
   name: "Ficha de aventura",
   version: 1,
+  systemId: "rpgcord-universal",
+  systemName: "RPGcord Universal",
   fields: [
     { id: "legacy-ancestry", category: "attributes", label: "Ancestralidade / Origem", type: "text", placeholder: "Ex.: Humano" },
     { id: "legacy-class", category: "attributes", label: "Classe / Arquétipo", type: "text", placeholder: "Ex.: Investigador" },
@@ -87,11 +89,45 @@ export function syncLegacyCharacter(character: Character): Character {
 
 export function normalizeSheetTemplate(data?: Partial<SheetTemplate>): SheetTemplate {
   if (!data?.fields || !Array.isArray(data.fields)) return DEFAULT_SHEET_TEMPLATE;
+  const categories: SheetCategory[] = ["attributes", "skills", "abilities", "inventory"];
+  const types: SheetFieldType[] = ["text", "number", "status", "checkbox", "counter", "richtext"];
+  const usedIds = new Set<string>();
+  const fields = data.fields.slice(0, 120).flatMap((candidate, index) => {
+    if (!candidate || typeof candidate !== "object") return [];
+    const category = categories.includes(candidate.category) ? candidate.category : undefined;
+    const type = types.includes(candidate.type) ? candidate.type : undefined;
+    const label = String(candidate.label || "").trim().slice(0, 100);
+    if (!category || !type || !label) return [];
+    const requestedId = String(candidate.id || `field-${index + 1}`).trim().slice(0, 100) || `field-${index + 1}`;
+    let id = requestedId;
+    let suffix = 2;
+    while (usedIds.has(id)) id = `${requestedId}-${suffix++}`;
+    usedIds.add(id);
+    const numeric = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : undefined;
+    const field: SheetFieldDefinition = {
+      id,
+      category,
+      label,
+      type,
+      ...(candidate.placeholder ? { placeholder: String(candidate.placeholder).slice(0, 240) } : {}),
+      ...(candidate.formula ? { formula: String(candidate.formula).slice(0, 500) } : {}),
+      ...(numeric(candidate.min) !== undefined ? { min: numeric(candidate.min) } : {}),
+      ...(numeric(candidate.max) !== undefined ? { max: numeric(candidate.max) } : {}),
+    };
+    if (type === "checkbox") field.defaultValue = Boolean(candidate.defaultValue);
+    else if (type === "number" || type === "counter" || type === "status") field.defaultValue = numeric(candidate.defaultValue) ?? 0;
+    else field.defaultValue = String(candidate.defaultValue ?? "").slice(0, 2000);
+    if (type === "status") field.defaultMax = numeric(candidate.defaultMax) ?? numeric(candidate.defaultValue) ?? 0;
+    return [field];
+  });
   return {
     id: "current",
-    name: String(data.name || "Ficha da campanha"),
-    version: Number(data.version || 1),
-    fields: data.fields.slice(0, 120),
-    updatedAt: data.updatedAt,
+    name: String(data.name || "Ficha da campanha").trim().slice(0, 120) || "Ficha da campanha",
+    version: Math.max(1, Math.round(Number(data.version) || 1)),
+    systemId: String(data.systemId || "custom").trim().slice(0, 100) || "custom",
+    systemName: String(data.systemName || (data.systemId === "rpgcord-universal" ? "RPGcord Universal" : "Modelo personalizado")).trim().slice(0, 120),
+    ...(data.sourcePdfUrl ? { sourcePdfUrl: String(data.sourcePdfUrl).trim().slice(0, 2000) } : {}),
+    fields,
+    ...(typeof data.updatedAt === "number" && Number.isFinite(data.updatedAt) ? { updatedAt: data.updatedAt } : {}),
   };
 }

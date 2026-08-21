@@ -150,3 +150,85 @@ html[data-theme="dark"] .light-preview-tag { background:#4a3a1c;color:#f0d9a6; }
 .character-upload:hover { border-color:#775fc0;background:#eee8fa; }.character-upload > svg { flex:none; }.character-upload > span { flex:1;min-width:0; }.character-upload strong,.character-upload small { display:block; }.character-upload strong { font-size:10px; }.character-upload small { margin-top:3px;color:#817694;font-size:10px;font-weight:400;text-transform:none;letter-spacing:0; }.character-upload input { display:none; }
 .character-upload-name { grid-column:1/-1;display:flex;align-items:center;gap:10px;margin-top:-4px;color:#6e657d;font-size:10px; }.character-upload-name span { flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }.character-upload-name button { display:flex;align-items:center;gap:4px;border:0;background:transparent;color:#8e4c61;font-size:10px; }
 .sheet-error { margin:0;padding:8px 10px;border:1px solid #e6bdbd;border-radius:7px;background:#fff0f0;color:#934444;font-size:10px;line-height:1.4; }
+
+/* Assets em camadas sobre o mapa. */
+.map-asset-layer { position:absolute;inset:0;pointer-events:none; }
+.map-asset-layer.fog-affected { z-index:2; }
+.map-asset-layer.fog-independent { z-index:8; }
+.map-asset { position:absolute;display:block;height:auto;padding:0;border:0;background:transparent;filter:drop-shadow(0 5px 7px rgba(18,13,28,.28));transform-origin:center;pointer-events:none;user-select:none; }
+.map-asset-layer button.map-asset { pointer-events:auto;cursor:grab;touch-action:none; }
+.map-asset-layer button.map-asset:active,.map-asset.dragging { cursor:grabbing;filter:drop-shadow(0 10px 12px rgba(18,13,28,.45)); }
+.map-asset img { display:block;width:100%;height:auto;pointer-events:none; }
+.map-asset.hidden-asset { opacity:.45;filter:grayscale(.25) drop-shadow(0 4px 6px rgba(18,13,28,.2));outline:1px dashed rgba(255,255,255,.8);outline-offset:3px; }
+.map-asset.locked { cursor:not-allowed!important; }
+.asset-state-icon { position:absolute;right:-8px;top:-8px;padding:3px;border-radius:50%;background:#46366d;color:#fff;box-sizing:content-box;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3)); }
+.scene-away { height:min(68vh,720px);min-height:430px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:35px;background:radial-gradient(circle at 50% 35%,var(--tint-violet),transparent 45%),var(--sage);color:var(--muted);text-align:center; }
+.scene-away svg { color:#7661ab; }
+.scene-away strong { margin-top:12px;color:var(--ink);font:400 21px var(--font-display); }
+.scene-away p { max-width:430px;margin:7px 0 0;font-size:11px;line-height:1.6; }
+
+/* Catálogo de assets do mestre. */
+.asset-manager { display:flex;flex-direction:column;gap:12px; }
+.asset-create { padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--field); }
+.asset-fields { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px; }
+.asset-fields label { min-width:0;margin:0!important; }
+.asset-fields .wide { grid-column:1/-1; }
+.asset-list { display:grid;gap:8px; }
+.asset-row { overflow:hidden;border:1px solid var(--line);border-radius:9px;background:var(--field); }
+.asset-row.hidden { opacity:.82; }
+.asset-row > header { display:flex;align-items:center;gap:8px;padding:8px; }
+.asset-preview { width:35px;height:35px;display:grid;place-items:center;flex:none;overflow:hidden;border-radius:7px;background:var(--tint-violet);color:var(--forest-2); }
+.asset-preview img { width:100%;height:100%;object-fit:cover; }
+.asset-row > header > div { min-width:0;flex:1; }
+.asset-row > header strong,.asset-row > header small { display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.asset-row > header strong { color:var(--ink);font-size:10px; }.asset-row > header small { margin-top:2px;color:var(--muted);font-size:10px; }
+.asset-row > header > button { width:28px;height:28px;display:grid;place-items:center;flex:none;border:0;border-radius:6px;background:transparent;color:var(--muted); }
+.asset-row > header > button:hover { background:var(--tint-violet);color:var(--forest-2); }
+.asset-row details { border-top:1px solid var(--line); }
+.asset-row summary { padding:8px 10px;color:var(--forest-2);font-size:10px;font-weight:700;cursor:pointer; }
+.asset-row details .asset-fields { padding:4px 10px 10px; }
+.asset-row-actions { display:flex;align-items:center;justify-content:flex-end;gap:7px;padding:9px 10px;border-top:1px solid var(--line); }
+.asset-row-actions > span { margin-right:auto;color:var(--red);font-size:10px;font-weight:700; }
+.asset-row-actions button { display:flex;align-items:center;gap:5px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font-size:10px;font-weight:700; }
+.asset-row-actions .danger { margin-right:auto;background:var(--tint-red);color:var(--on-tint-red); }
+.asset-empty { display:flex;align-items:center;justify-content:center;gap:7px;padding:17px;border:1px dashed var(--line);border-radius:9px;color:var(--muted);font-size:10px; }
+
+/* Fichas de criatura e revelação progressiva em combate. */
+.monster-token-list > article { border-bottom:1px solid var(--line); }
+.monster-token-summary { display:flex;align-items:center;gap:8px;padding:7px 2px; }
+.monster-token-summary .mini-token { overflow:hidden;flex:none; }.monster-token-summary .mini-token img { width:100%;height:100%;object-fit:cover; }
+.monster-token-summary strong { min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px; }
+.monster-token-summary button { width:28px;height:28px;display:grid;place-items:center;padding:0;border:0;border-radius:6px;background:transparent;color:var(--muted); }
+.monster-token-summary button:last-child { color:#9e5b58; }
+.monster-sheet-toggle svg { transition:transform .15s ease; }.monster-token-list > article.expanded .monster-sheet-toggle svg { transform:rotate(180deg); }
+.monster-sheet-editor { display:grid;gap:11px;padding:11px;margin:0 0 9px;border:1px solid var(--line);border-radius:9px;background:var(--field); }
+.monster-core-fields { display:grid;grid-template-columns:minmax(0,1fr) 30px minmax(0,1fr) minmax(0,1fr) 30px;align-items:end;gap:6px; }
+.monster-core-fields label { min-width:0;margin:0!important; }.monster-core-fields input { padding:8px 6px;text-align:center; }
+.monster-core-fields > button,.monster-detail-group article > button { height:32px;display:grid;place-items:center;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--muted); }
+.monster-core-fields > button.revealed,.monster-detail-group article > button.revealed { border-color:#9d88d5;background:var(--tint-violet);color:var(--forest-2); }
+.monster-detail-group { display:grid;gap:6px; }
+.monster-detail-group > header { display:flex;align-items:center;justify-content:space-between; }
+.monster-detail-group > header strong { font-size:10px; }.monster-detail-group > header button { display:flex;align-items:center;gap:4px;padding:5px 7px;border:0;border-radius:5px;background:var(--sage);color:var(--forest-2);font-size:10px;font-weight:700; }
+.monster-detail-group article { display:grid;grid-template-columns:110px minmax(0,1fr) 32px 32px;gap:6px;align-items:start; }
+.monster-detail-group article input,.monster-detail-group article textarea { min-width:0;padding:8px;font-size:10px; }
+.monster-detail-group article textarea { min-height:58px;resize:vertical; }
+.monster-detail-group article > button.danger { color:var(--red); }
+.monster-detail-group > p { margin:0;padding:8px;color:var(--muted);font-size:10px;text-align:center; }
+.monster-combat-section { margin:17px 0;padding-top:15px;border-top:1px solid var(--line); }
+.monster-combat-section > header { display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:9px; }
+.monster-combat-section > header > div { display:flex;align-items:center;gap:6px; }.monster-combat-section > header strong { font:400 15px var(--font-display); }.monster-combat-section > header small { max-width:170px;color:var(--muted);font-size:10px;line-height:1.35;text-align:right; }
+.monster-combat-grid { display:grid;gap:9px; }
+.monster-combat-card { overflow:hidden;border:1px solid var(--line);border-radius:10px;background:var(--field); }
+.monster-combat-card > header { display:flex;align-items:center;gap:8px;padding:10px;border-bottom:1px solid var(--line); }
+.monster-combat-card > header > span { width:36px;height:36px;display:grid;place-items:center;flex:none;overflow:hidden;border:2px solid var(--token-color);border-radius:50%;background:var(--token-color);color:#fff;font-size:10px;font-weight:800; }.monster-combat-card > header > span img { width:100%;height:100%;object-fit:cover; }
+.monster-combat-card > header > div { min-width:0;flex:1; }.monster-combat-card > header strong,.monster-combat-card > header small { display:block; }.monster-combat-card > header strong { font-size:11px; }.monster-combat-card > header small { margin-top:3px;color:var(--muted);font-size:10px; }.monster-combat-card > header small svg { vertical-align:-2px; }
+.monster-reveal-button { width:27px;height:27px;display:grid;place-items:center;flex:none;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--forest-2); }
+.monster-health { padding:9px 10px;border-bottom:1px solid var(--line); }.monster-health p { display:flex;align-items:center;gap:5px;margin:0 0 6px;color:var(--muted);font-size:10px; }.monster-health p span { flex:1; }.monster-health p b { color:var(--ink); }.monster-health > i { display:block;height:5px;overflow:hidden;border-radius:99px;background:var(--sage); }.monster-health > i em { display:block;height:100%;background:linear-gradient(90deg,#9f424c,#d76868);transition:width .2s; }
+.monster-combat-card > section { padding:9px 10px;border-bottom:1px solid var(--line); }.monster-combat-card > section:last-child { border-bottom:0; }.monster-combat-card h4 { display:flex;align-items:center;gap:5px;margin:0 0 6px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em; }.monster-combat-card > section > div { display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr) 27px;align-items:center;gap:6px;padding:5px 0;border-top:1px dotted var(--line); }.monster-combat-card > section > div:first-of-type { border-top:0; }.monster-combat-card > section > div span,.monster-combat-card > section > div strong { min-width:0;font-size:10px;overflow-wrap:anywhere; }.monster-combat-card > section > div span { color:var(--muted); }.monster-combat-card > section > div.hidden { opacity:.72; }.monster-group-empty { margin:0;color:var(--muted);font-size:10px;font-style:italic; }
+
+@media (max-width:600px) {
+  .asset-fields { grid-template-columns:1fr; }.asset-fields .wide { grid-column:auto; }
+  .monster-core-fields { grid-template-columns:1fr 30px 1fr 1fr 30px; }
+  .monster-detail-group article { grid-template-columns:1fr 32px 32px; }.monster-detail-group article textarea { grid-column:1/-1;grid-row:2; }
+  .scene-away { min-height:360px;height:52vh; }
+}

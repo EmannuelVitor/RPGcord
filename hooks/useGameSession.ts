@@ -21,8 +21,10 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveRoll, rollOne } from "@/lib/dice";
 import { db, isFirebaseConfigured } from "@/lib/firebase";
+import { normalizeMapAsset, orderMapAssets } from "@/lib/map-assets";
+import { normalizeMonsterSheet, publicMonsterSheet } from "@/lib/monster-sheet";
 import { DEFAULT_SHEET_TEMPLATE, normalizeSheetTemplate } from "@/lib/sheet-template";
-import type { AppUser, CampaignJournal, CampaignMember, CampaignMusic, Character, CharacterNotes, ChatMessage, DiceRoll, DiceValidationMode, FogArea, InitiativeState, LightSource, MapToken, Scene, SheetTemplate } from "@/lib/types";
+import type { AppUser, CampaignJournal, CampaignMember, CampaignMusic, Character, CharacterNotes, ChatMessage, DiceRoll, DiceValidationMode, FogArea, InitiativeState, LightSource, MapAsset, MapToken, MonsterSheet, NpcRecord, Scene, SheetTemplate } from "@/lib/types";
 
 function blankCharacter(user: AppUser): Character {
   return {
@@ -56,6 +58,7 @@ const initialScene: Scene = {
   movementBounds: { enabled: false, left: 3, top: 5, right: 97, bottom: 95 },
   revealedAreas: [],
   dynamicLights: [],
+  excludedUserIds: [],
 };
 
 /** Teto de areas reveladas guardadas na cena. */
@@ -97,6 +100,9 @@ export function useGameSession(campaignId: string, user: AppUser) {
   const [hasCharacter, setHasCharacter] = useState(false);
   const [rolls, setRolls] = useState<DiceRoll[]>([]);
   const [tokens, setTokens] = useState<MapToken[]>([]);
+  const [privateMonsterSheets, setPrivateMonsterSheets] = useState<Record<string, MonsterSheet>>({});
+  const [assets, setAssets] = useState<MapAsset[]>([]);
+  const [npcs, setNpcs] = useState<NpcRecord[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [whisperMessages, setWhisperMessages] = useState<ChatMessage[]>([]);
   const [scene, setScene] = useState<Scene>(initialScene);
@@ -107,6 +113,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
   const [participants, setParticipants] = useState<CampaignMember[]>([]);
   const [initiative, setInitiative] = useState<InitiativeState>(initialInitiative);
   const [gmId, setGmId] = useState("");
+  const isGM = gmId === user.id;
   // Espelha a cena para que as acoes rapidas do mapa nao leiam um valor velho
   // capturado no fechamento do callback.
   const sceneRef = useRef(scene);
@@ -122,6 +129,9 @@ export function useGameSession(campaignId: string, user: AppUser) {
     setHasCharacter(false);
     setRolls([]);
     setTokens([]);
+    setPrivateMonsterSheets({});
+    setAssets([]);
+    setNpcs([]);
     setChatMessages([]);
     setWhisperMessages([]);
     setScene(initialScene);
@@ -131,6 +141,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
     setNotes(initialNotes);
     setParticipants([]);
     setInitiative(initialInitiative);
+    setGmId("");
     setSyncError(undefined);
     if (!online || !db || !campaignId || !user.id) return;
 
@@ -161,7 +172,10 @@ export function useGameSession(campaignId: string, user: AppUser) {
     );
     const unsubscribeTokens = onSnapshot(
       collection(db, "campaigns", campaignId, "tokens"),
-      (snapshot) => setTokens(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as MapToken)),
+      (snapshot) => setTokens(snapshot.docs.map((item) => {
+        const value = { id: item.id, ...item.data() } as MapToken;
+        return value.kind === "monster" ? { ...value, monsterSheet: normalizeMonsterSheet(value.monsterSheet) } : value;
+      })),
       () => setSyncError("Os pinos do mapa não puderam ser sincronizados."),
     );
     const unsubscribeScene = onSnapshot(
@@ -172,6 +186,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
         ...snapshot.data(),
         revealedAreas: snapshot.data().revealedAreas ?? [],
         dynamicLights: (snapshot.data().dynamicLights ?? []).map((light: LightSource) => normalizeLight(light)),
+        excludedUserIds: Array.isArray(snapshot.data().excludedUserIds) ? snapshot.data().excludedUserIds.map(String) : [],
       } as Scene : initialScene),
       () => setSyncError("A cena atual não pôde ser sincronizada."),
     );
@@ -291,6 +306,44 @@ export function useGameSession(campaignId: string, user: AppUser) {
       markAway();
     };
   }, [campaignId, online, user]);
+
+  useEffect(() => {
+    setAssets([]);
+    if (!online || !db || !campaignId) return;
+    const assetCollection = collection(db, "campaigns", campaignId, "assets");
+    const assetSource = isGM ? assetCollection : query(assetCollection, where("hidden", "==", false));
+    return onSnapshot(
+      assetSource,
+      (snapshot) => setAssets(orderMapAssets(snapshot.docs.map((item) => normalizeMapAsset({ id: item.id, ...item.data() } as MapAsset)))),
+      () => setSyncError("Os assets do mapa não puderam ser sincronizados."),
+    );
+  }, [campaignId, isGM, online]);
+
+  useEffect(() => {
+    setPrivateMonsterSheets({});
+    if (!isGM || !online || !db || !campaignId) return;
+    return onSnapshot(
+      collection(db, "campaigns", campaignId, "monsterSheets"),
+      (snapshot) => setPrivateMonsterSheets(Object.fromEntries(snapshot.docs.map((item) => [item.id, normalizeMonsterSheet(item.data() as MonsterSheet)]))),
+      () => setSyncError("As fichas privadas das criaturas não puderam ser sincronizadas."),
+    );
+  }, [campaignId, isGM, online]);
+
+  useEffect(() => {
+    setNpcs([]);
+    if (!isGM || !online || !db || !campaignId) return;
+    return onSnapshot(
+      query(collection(db, "campaigns", campaignId, "npcs"), orderBy("name")),
+      (snapshot) => setNpcs(snapshot.docs.map((item) => ({
+        id: item.id,
+        ...item.data(),
+        tags: Array.isArray(item.data().tags) ? item.data().tags.map(String) : [],
+        createdAt: item.data().createdAt?.toMillis?.() ?? undefined,
+        updatedAt: item.data().updatedAt?.toMillis?.() ?? undefined,
+      }) as NpcRecord)),
+      () => setSyncError("O catálogo de NPCs não pôde ser sincronizado."),
+    );
+  }, [campaignId, isGM, online]);
 
   useEffect(() => {
     const member = participants.find((item) => item.userId === user.id);
@@ -427,9 +480,31 @@ export function useGameSession(campaignId: string, user: AppUser) {
   }, [campaignId, gmId, online, tokens, user.id]);
 
   const addToken = useCallback(async (token: MapToken) => {
-    setTokens((current) => [...current.filter((item) => item.id !== token.id), token]);
-    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "tokens", token.id), token);
+    const monsterSheet = token.kind === "monster" ? normalizeMonsterSheet(token.monsterSheet) : undefined;
+    const saved = monsterSheet ? { ...token, monsterSheet: publicMonsterSheet(monsterSheet) } : token;
+    setTokens((current) => [...current.filter((item) => item.id !== saved.id), saved]);
+    if (monsterSheet) setPrivateMonsterSheets((current) => ({ ...current, [saved.id]: monsterSheet }));
+    if (online && db) {
+      const batch = writeBatch(db);
+      batch.set(doc(db, "campaigns", campaignId, "tokens", saved.id), saved);
+      if (monsterSheet) batch.set(doc(db, "campaigns", campaignId, "monsterSheets", saved.id), { ...monsterSheet, updatedAt: serverTimestamp() });
+      await batch.commit();
+    }
   }, [campaignId, online]);
+
+  const updateMonsterSheet = useCallback(async (tokenId: string, sheet: MonsterSheet) => {
+    if (gmId !== user.id) throw new Error("Somente o mestre pode editar fichas de criaturas.");
+    const monsterSheet = normalizeMonsterSheet(sheet);
+    const publicSheet = publicMonsterSheet(monsterSheet);
+    setPrivateMonsterSheets((current) => ({ ...current, [tokenId]: monsterSheet }));
+    setTokens((current) => current.map((token) => token.id === tokenId ? { ...token, monsterSheet: publicSheet } : token));
+    if (online && db) {
+      const batch = writeBatch(db);
+      batch.set(doc(db, "campaigns", campaignId, "monsterSheets", tokenId), { ...monsterSheet, updatedAt: serverTimestamp() });
+      batch.set(doc(db, "campaigns", campaignId, "tokens", tokenId), { monsterSheet: publicSheet }, { merge: true });
+      await batch.commit();
+    }
+  }, [campaignId, gmId, online, user.id]);
 
   const setTokenHidden = useCallback(async (tokenId: string, hidden: boolean) => {
     setTokens((current) => current.map((token) => token.id === tokenId ? { ...token, hidden } : token));
@@ -438,8 +513,40 @@ export function useGameSession(campaignId: string, user: AppUser) {
 
   const removeToken = useCallback(async (tokenId: string) => {
     setTokens((current) => current.filter((token) => token.id !== tokenId));
-    if (online && db) await deleteDoc(doc(db, "campaigns", campaignId, "tokens", tokenId));
+    setPrivateMonsterSheets((current) => {
+      const next = { ...current };
+      delete next[tokenId];
+      return next;
+    });
+    if (online && db) {
+      const batch = writeBatch(db);
+      batch.delete(doc(db, "campaigns", campaignId, "tokens", tokenId));
+      batch.delete(doc(db, "campaigns", campaignId, "monsterSheets", tokenId));
+      await batch.commit();
+    }
   }, [campaignId, online]);
+
+  const saveAsset = useCallback(async (asset: MapAsset) => {
+    if (gmId !== user.id) throw new Error("Somente o mestre pode alterar assets da cena.");
+    const saved = normalizeMapAsset({ ...asset, updatedAt: Date.now() });
+    setAssets((current) => orderMapAssets([...current.filter((item) => item.id !== saved.id), saved]));
+    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "assets", saved.id), { ...saved, updatedAt: serverTimestamp() }, { merge: true });
+  }, [campaignId, gmId, online, user.id]);
+
+  const moveAsset = useCallback(async (assetId: string, x: number, y: number) => {
+    if (gmId !== user.id) return;
+    const asset = assets.find((item) => item.id === assetId);
+    if (!asset || asset.locked) return;
+    const saved = normalizeMapAsset({ ...asset, x, y, updatedAt: Date.now() });
+    setAssets((current) => orderMapAssets(current.map((item) => item.id === assetId ? saved : item)));
+    if (online && db) await setDoc(doc(db, "campaigns", campaignId, "assets", assetId), { x: saved.x, y: saved.y, updatedAt: serverTimestamp() }, { merge: true });
+  }, [assets, campaignId, gmId, online, user.id]);
+
+  const deleteAsset = useCallback(async (assetId: string) => {
+    if (gmId !== user.id) throw new Error("Somente o mestre pode remover assets da cena.");
+    setAssets((current) => current.filter((asset) => asset.id !== assetId));
+    if (online && db) await deleteDoc(doc(db, "campaigns", campaignId, "assets", assetId));
+  }, [campaignId, gmId, online, user.id]);
 
   const saveScene = useCallback(async (next: Scene) => {
     setScene(next);
@@ -496,6 +603,49 @@ export function useGameSession(campaignId: string, user: AppUser) {
     setTokens((current) => current.map((token) => token.id === tokenId ? { ...token, visionRadius: normalized ?? undefined } : token));
     if (online && db) await setDoc(doc(db, "campaigns", campaignId, "tokens", tokenId), { visionRadius: normalized }, { merge: true });
   }, [campaignId, online]);
+
+  const setPlayerScenePresence = useCallback(async (memberId: string, present: boolean) => {
+    if (gmId !== user.id) throw new Error("Somente o mestre pode controlar a presença na cena.");
+    const excluded = new Set(sceneRef.current.excludedUserIds ?? []);
+    if (present) excluded.delete(memberId); else excluded.add(memberId);
+    await patchScene({ excludedUserIds: Array.from(excluded).slice(0, 100) });
+  }, [gmId, patchScene, user.id]);
+
+  const saveNpc = useCallback(async (npc: NpcRecord) => {
+    if (gmId !== user.id) throw new Error("Somente o mestre pode editar NPCs.");
+    const existing = npcs.find((item) => item.id === npc.id);
+    const imageUrl = npc.imageUrl?.trim();
+    const saved: NpcRecord = {
+      id: npc.id,
+      name: npc.name.trim().slice(0, 100) || "NPC sem nome",
+      role: npc.role.trim().slice(0, 120),
+      location: npc.location.trim().slice(0, 120),
+      description: npc.description.trim().slice(0, 4000),
+      appearance: npc.appearance.trim().slice(0, 2000),
+      personality: npc.personality.trim().slice(0, 2000),
+      goals: npc.goals.trim().slice(0, 2000),
+      notes: npc.notes.trim().slice(0, 10000),
+      ...(imageUrl ? { imageUrl } : {}),
+      tags: Array.from(new Set(npc.tags.map((tag) => tag.trim()).filter(Boolean))).slice(0, 20),
+      createdAt: existing?.createdAt ?? npc.createdAt ?? Date.now(),
+      updatedAt: Date.now(),
+    };
+    setNpcs((current) => [...current.filter((item) => item.id !== saved.id), saved].sort((left, right) => left.name.localeCompare(right.name, "pt-BR")));
+    if (online && db) {
+      const { createdAt: _createdAt, updatedAt: _updatedAt, ...payload } = saved;
+      await setDoc(doc(db, "campaigns", campaignId, "npcs", saved.id), {
+        ...payload,
+        ...(existing ? {} : { createdAt: serverTimestamp() }),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    }
+  }, [campaignId, gmId, npcs, online, user.id]);
+
+  const deleteNpc = useCallback(async (npcId: string) => {
+    if (gmId !== user.id) throw new Error("Somente o mestre pode remover NPCs.");
+    setNpcs((current) => current.filter((npc) => npc.id !== npcId));
+    if (online && db) await deleteDoc(doc(db, "campaigns", campaignId, "npcs", npcId));
+  }, [campaignId, gmId, online, user.id]);
 
   const sendChatMessage = useCallback(async (text: string, image?: { imageUrl: string; driveFileId: string }, spoiler = false, recipient?: CampaignMember, mentionIds: string[] = []) => {
     const cleanText = text.trim().slice(0, 2000);
@@ -560,7 +710,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
   }, [campaignId, online, user.id]);
 
   const saveSheetTemplate = useCallback(async (nextTemplate: SheetTemplate) => {
-    const saved = { ...nextTemplate, id: "current", updatedAt: Date.now() };
+    const saved = { ...normalizeSheetTemplate(nextTemplate), id: "current", updatedAt: Date.now() };
     setSheetTemplate(saved);
     if (online && db) await setDoc(doc(db, "campaigns", campaignId), { sheetTemplate: { ...saved, updatedAt: serverTimestamp() } }, { merge: true });
   }, [campaignId, online]);
@@ -631,8 +781,13 @@ export function useGameSession(campaignId: string, user: AppUser) {
     }
   }, [campaignId, online]);
 
+  const sessionTokens = useMemo(() => isGM
+    ? tokens.map((token) => token.kind === "monster" && privateMonsterSheets[token.id] ? { ...token, monsterSheet: privateMonsterSheets[token.id] } : token)
+    : tokens,
+  [isGM, privateMonsterSheets, tokens]);
+
   return useMemo(() => ({
-    character, characters, hasCharacter, rolls, tokens, scene, journal, music, initiative, sheetTemplate, chatMessages, whisperMessages, notes, participants, isGM: gmId === user.id, online, syncError,
-    saveCharacter, assignCharacter, rollDie, moveToken, toggleTokenLock, addToken, removeToken, setTokenHidden, saveScene, clearRevealed, commitRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, editChatMessage, deleteChatMessage, setTyping, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveInitiative, saveMusic, updateMusicPlayback,
-  }), [addToken, assignCharacter, character, characters, chatMessages, clearChat, clearRevealed, commitRevealed, setTokenHidden, createLight, deleteChatMessage, deleteLight, editChatMessage, gmId, hasCharacter, initiative, journal, moveLight, moveToken, music, notes, online, participants, removeToken, rollDie, rolls, saveCharacter, saveInitiative, saveJournal, saveMusic, saveNotes, saveScene, saveSheetTemplate, scene, sendChatMessage, setGlobalVision, setTokenVision, setTyping, sheetTemplate, syncError, toggleTokenLock, tokens, updateLight, updateMusicPlayback, user.id, whisperMessages]);
+    character, characters, hasCharacter, rolls, tokens: sessionTokens, assets, npcs, scene, journal, music, initiative, sheetTemplate, chatMessages, whisperMessages, notes, participants, isGM, online, syncError,
+    saveCharacter, assignCharacter, rollDie, moveToken, toggleTokenLock, addToken, updateMonsterSheet, removeToken, setTokenHidden, saveAsset, moveAsset, deleteAsset, saveScene, setPlayerScenePresence, clearRevealed, commitRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, editChatMessage, deleteChatMessage, setTyping, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveInitiative, saveNpc, deleteNpc, saveMusic, updateMusicPlayback,
+  }), [addToken, assets, assignCharacter, character, characters, chatMessages, clearChat, clearRevealed, commitRevealed, createLight, deleteAsset, deleteChatMessage, deleteLight, deleteNpc, editChatMessage, hasCharacter, initiative, isGM, journal, moveAsset, moveLight, moveToken, music, npcs, notes, online, participants, removeToken, rollDie, rolls, saveAsset, saveCharacter, saveInitiative, saveJournal, saveMusic, saveNotes, saveNpc, saveScene, saveSheetTemplate, scene, sendChatMessage, sessionTokens, setGlobalVision, setPlayerScenePresence, setTokenHidden, setTokenVision, setTyping, sheetTemplate, syncError, toggleTokenLock, updateLight, updateMonsterSheet, updateMusicPlayback, whisperMessages]);
 }

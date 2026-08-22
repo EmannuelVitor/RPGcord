@@ -47,3 +47,16 @@
 .rich-toolbar button:hover { background:#e8e1f2; }
 .rich-field textarea { min-height:110px;border:0;border-radius:0;resize:vertical;box-shadow:none!important; }
 .field-formula { display:block;padding:6px 8px;border-radius:5px;background:#f1ecf8;color:#725ca1!important;font-family:ui-monospace,monospace; }
+
+/* Registro extensível de sistemas e intercâmbio de modelos estruturados. */
+.template-system-picker { display:grid;gap:9px;padding:11px;border:1px solid #d8cfee;border-radius:10px;background:var(--panel); }
+.template-system-picker > header { display:flex;align-items:flex-start;justify-content:space-between;gap:9px; }
+.template-system-picker > header strong,.template-system-picker > header small { display:block; }.template-system-picker > header strong { color:var(--ink);font-size:11px; }.template-system-picker > header small { max-width:245px;margin-top:3px;color:var(--muted);font-size:10px;line-height:1.4; }.template-system-picker > header > span { flex:none;padding:4px 7px;border-radius:99px;background:var(--tint-violet);color:var(--forest-2);font-size:10px;font-weight:800; }
+.template-system-picker label { margin:0!important; }.template-system-picker > p { margin:0;color:var(--muted);font-size:10px;line-height:1.5; }.template-system-picker .template-reset-warning { padding:8px;border-radius:7px;background:var(--tint-red);color:var(--on-tint-red); }
+.template-file-actions { display:grid;grid-template-columns:1fr 1fr;gap:7px; }.template-file-actions button { display:flex;align-items:center;justify-content:center;gap:5px;padding:8px;border:1px solid var(--line);border-radius:7px;background:var(--field);color:var(--forest-2);font-size:10px;font-weight:700; }.template-file-actions button:hover { background:var(--sage); }
+.template-file-input { display:none; }.template-source-link { color:var(--forest-2);font-size:10px;font-weight:700;text-align:center; }
+
+@media (max-width:520px) {
+  .template-system-picker > header { flex-direction:column; }.template-file-actions { grid-template-columns:1fr; }
+  .template-field-main,.template-number-settings { grid-template-columns:1fr; }
+}

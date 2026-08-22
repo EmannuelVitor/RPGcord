@@ -53,3 +53,11 @@ html[data-theme="dark"] .chat-mention { background:#4a386c;color:#e4d8ff; }
   .movement-bounds-grid { grid-template-columns:1fr 1fr; }
   .sidebar-resizer,.workspace-panel-resizer { display:none; }
 }
+
+html[data-theme="dark"] .asset-create,html[data-theme="dark"] .asset-row,html[data-theme="dark"] .monster-sheet-editor,html[data-theme="dark"] .monster-combat-card,html[data-theme="dark"] .template-system-picker { border-color:var(--line);background:var(--field); }
+html[data-theme="dark"] .asset-preview,html[data-theme="dark"] .npc-catalog > button > span { background:var(--tint-violet); }
+html[data-theme="dark"] .scene-away { background:radial-gradient(circle at 50% 35%,#352b4b,transparent 45%),#2b2537; }
+html[data-theme="dark"] .npc-toolbar,html[data-theme="dark"] .npc-catalog > button:hover,html[data-theme="dark"] .npc-catalog > button.active { background:var(--panel); }
+html[data-theme="dark"] .npc-catalog { background:var(--sage); }
+html[data-theme="dark"] .npc-editor { background:var(--paper); }
+html[data-theme="dark"] .monster-detail-group > header button,html[data-theme="dark"] .template-file-actions button { background:var(--sage); }

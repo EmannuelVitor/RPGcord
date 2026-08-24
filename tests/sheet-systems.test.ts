@@ -3,6 +3,26 @@ import { normalizeSheetTemplate } from "@/lib/sheet-template";
 import { SHEET_SYSTEM_PRESETS, templateFromPreset } from "@/lib/sheet-systems";
 
 describe("sheet system registry", () => {
+  it("offers the universal model and the five standard systems", () => {
+    expect(SHEET_SYSTEM_PRESETS.map((preset) => preset.id)).toEqual([
+      "rpgcord-universal",
+      "dnd-5e",
+      "3det",
+      "ordem-paranormal",
+      "tormenta-20",
+      "kult-divinity-lost",
+    ]);
+  });
+
+  it.each(SHEET_SYSTEM_PRESETS)("keeps unique, valid fields in $name", (preset) => {
+    const normalized = normalizeSheetTemplate(preset.template);
+    expect(preset.template.fields.length).toBeGreaterThan(0);
+    expect(normalized.fields).toHaveLength(preset.template.fields.length);
+    expect(new Set(preset.template.fields.map((field) => field.id)).size).toBe(preset.template.fields.length);
+    expect(preset.template.systemId).toBe(preset.id);
+    expect(preset.template.systemName).toBe(preset.name);
+  });
+
   it("creates an independent campaign template from a registered preset", () => {
     const preset = SHEET_SYSTEM_PRESETS[0];
     const first = templateFromPreset(preset, 4);

@@ -106,10 +106,11 @@ campaignInvites/{codigo}  código de convite → campanha
 O dono da campanha (`ownerId`) é o Mestre; o papel é resolvido pelo documento da
 campanha, não por variável de ambiente.
 
-O registro de fichas já aceita novos sistemas sem mudanças no editor. O modelo
-`RPGcord Universal` acompanha o projeto; modelos oficiais adicionais devem ser
-registrados somente após o fornecimento e a validação dos respectivos PDFs e
-arquivos estruturados, evitando inventar campos ou regras do sistema.
+O registro de fichas já aceita novos sistemas sem mudanças no editor. A
+biblioteca inicial inclui `RPGcord Universal`, `D&D (5ª edição)`, `3D&T`,
+`Ordem Paranormal`, `Tormenta 20` e `KULT: Divindade Perdida`. O Mestre pode
+aplicar um desses modelos e ainda personalizar, importar ou exportar a estrutura
+em JSON para a campanha.
 
 ## 3. Discord Activity
 

@@ -24,7 +24,9 @@ export async function POST(request: Request) {
     const decoded = await getAdminAuth().verifyIdToken(idToken);
     const form = await request.formData();
     const campaignId = String(form.get("campaignId") ?? "");
-    const purpose = form.get("purpose") === "character" ? "personagem" : "chat";
+    const purposeNames = { asset: "asset", character: "personagem", creature: "criatura" } as const;
+    const requestedPurpose = String(form.get("purpose") ?? "chat");
+    const purpose = requestedPurpose in purposeNames ? purposeNames[requestedPurpose as keyof typeof purposeNames] : "chat";
     const file = form.get("file");
     if (!campaignId || !(file instanceof File)) return NextResponse.json({ error: "Campanha ou imagem ausente." }, { status: 400 });
     if (!ALLOWED_IMAGE_TYPES.has(file.type)) return NextResponse.json({ error: "Envie uma imagem JPG, PNG, WebP ou GIF." }, { status: 415 });
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
     const message = reason instanceof Error ? reason.message : "Não foi possível enviar a imagem.";
     const driveNotReady = /Drive|Google|autoriza|service|permission|permiss|API|folder|pasta|insufficient/i.test(message);
     return NextResponse.json({
-      error: driveNotReady ? "O armazenamento do chat ainda não foi autorizado no Google Drive." : message,
+      error: driveNotReady ? "O armazenamento de imagens ainda não foi autorizado no Google Drive." : message,
     }, { status: driveNotReady ? 503 : 500 });
   }
 }

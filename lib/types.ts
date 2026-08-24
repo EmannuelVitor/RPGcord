@@ -139,6 +139,18 @@ export type MonsterSheet = {
   revealedFields: string[];
 };
 
+/** Criatura reutilizável da campanha, independente dos pinos de uma cena. */
+export type CreatureRecord = {
+  id: string;
+  name: string;
+  initials: string;
+  color: string;
+  imageUrl?: string;
+  sheet: MonsterSheet;
+  createdAt?: number;
+  updatedAt?: number;
+};
+
 export type MapAssetKind = "scenery" | "loot" | "trap" | "other";
 
 export type MapAsset = {

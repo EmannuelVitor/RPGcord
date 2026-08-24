@@ -31,6 +31,7 @@ import {
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { usePanelPresence } from "@/hooks/usePanelPresence";
 import type { useTheme } from "@/hooks/useTheme";
 import { Battlemap } from "@/components/Battlemap";
 import { BrandMark } from "@/components/BrandMark";
@@ -56,6 +57,7 @@ import { useResizablePanels } from "@/hooks/useResizablePanels";
 import { characterNameOf, composeName, isOnline } from "@/lib/display-name";
 import { isUserInScene } from "@/lib/scene-presence";
 import type { AppUser, Campaign, CampaignMember } from "@/lib/types";
+import { workspacePanelWidth } from "@/lib/workspace-panel-layout";
 
 type PanelKey = "sheet" | "history" | "chat" | "journal" | "notes" | "initiative" | "npcs" | "settings" | "gm" | "table";
 type WhisperTabKey = `whisper:${string}`;
@@ -144,7 +146,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
   const lastMessageRef = useRef<string | undefined>(undefined);
   const lastWhisperRef = useRef<string | undefined>(undefined);
   const knownWhisperPartnersRef = useRef<Set<string>>(new Set());
-  const { sidebarWidth, panelWidth, startResize } = useResizablePanels();
+  const { sidebarWidth, startResize } = useResizablePanels();
 
   const openPanel = useCallback((panel: PanelKey) => {
     setOpenTabs((current) => current.includes(panel) ? current : [...current, panel]);
@@ -171,7 +173,6 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
     setOpenTabs((current) => {
       const next = current.filter((item) => item !== panel);
       setActiveTab((active) => active === panel ? next.at(-1) : active);
-      if (next.length === 0) setPanelPinned(false);
       return next;
     });
   }, []);
@@ -242,6 +243,12 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
   }, [activeTab, game.whisperMessages, user.id]);
 
   const panelOpen = Boolean(activeTab && openTabs.includes(activeTab));
+  const { renderedItem: renderedTab, isClosing: panelClosing, isPresent: panelPresent } = usePanelPresence(panelOpen ? activeTab : undefined);
+  const displayedTabs = panelClosing && renderedTab && openTabs.length === 0 ? [renderedTab] : openTabs;
+
+  useEffect(() => {
+    if (!panelPresent) setPanelPinned(false);
+  }, [panelPresent]);
   useEscapeKey(useCallback(() => {
     if (revealOpen) { setRevealOpen(false); return; }
     if (detailsOpen) { setDetailsOpen(false); return; }
@@ -296,7 +303,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
   }
 
   return (
-    <main className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${panelPinned && panelOpen ? "panel-pinned" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px`, "--panel-width": `${panelWidth}px` } as CSSProperties}>
+    <main className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${panelPinned && panelPresent ? "panel-pinned" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px`, "--panel-width": `${workspacePanelWidth(renderedTab ?? "chat")}px` } as CSSProperties}>
       <button className="mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Abrir menu"><Menu /></button>
       <button className="sidebar-toggle" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Exibir menu lateral" : "Ocultar menu lateral"}>{sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button>
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
@@ -351,11 +358,10 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
 
       <button className={`chat-floating-button ${totalUnread ? "has-unread" : ""}`} onClick={() => openPanel("chat")} aria-label="Abrir chat da sessão"><MessageCircle />{totalUnread > 0 ? <span>{totalUnread > 99 ? "99+" : totalUnread}</span> : null}</button>
 
-      {panelOpen && activeTab ? <div className={`workspace-panel-layer ${panelPinned ? "pinned" : "overlay"}`} onMouseDown={(event) => { if (!panelPinned && event.target === event.currentTarget) closePanel(activeTab); }}>
-        <button className="panel-resizer workspace-panel-resizer" aria-label="Redimensionar painel lateral direito" title="Arraste para redimensionar o painel" onPointerDown={(event) => startResize("right", event)} />
-        <aside className="workspace-tabs-panel">
+      {panelPresent && renderedTab ? <div className={`workspace-panel-layer ${panelPinned ? "pinned" : "overlay"} ${panelClosing ? "closing" : "opening"}`} onMouseDown={(event) => { if (!panelPinned && !panelClosing && event.target === event.currentTarget) closePanel(renderedTab); }}>
+        <aside className="workspace-tabs-panel" aria-label={`Painel ${getTabLabel(renderedTab)}`}>
           <header className="workspace-tabs-header">
-            <div className="workspace-tabs">{openTabs.map((tab) => {
+            <div className="workspace-tabs">{displayedTabs.map((tab) => {
               const privateTab = isWhisperTab(tab);
               const partnerId = privateTab ? whisperPartnerId(tab) : undefined;
               const Icon = privateTab ? LockKeyhole : panelIcons[tab];
@@ -372,7 +378,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
             })}</div>
             <button className={panelPinned ? "active" : ""} onClick={() => setPanelPinned((value) => !value)} title={panelPinned ? "Desafixar painel" : "Fixar painel"}>{panelPinned ? <PinOff size={16} /> : <Pin size={16} />}</button>
           </header>
-          <div className="workspace-tab-content"><SectionErrorBoundary title="Este painel não pôde ser exibido">{renderPanel(activeTab)}</SectionErrorBoundary></div>
+          <div className="workspace-tab-content" key={renderedTab}><SectionErrorBoundary title="Este painel não pôde ser exibido">{renderPanel(renderedTab)}</SectionErrorBoundary></div>
         </aside>
       </div> : null}
 

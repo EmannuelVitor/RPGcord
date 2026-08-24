@@ -11,7 +11,7 @@ const groups: Array<{ kind: MonsterDetailKind; key: "attributes" | "weaknesses" 
   { kind: "ability", key: "abilities", label: "Habilidades" },
 ];
 
-export function MonsterSheetEditor({ token, onSave }: { token: MapToken; onSave: (sheet: MonsterSheet) => Promise<void> }) {
+export function MonsterSheetEditor({ token, onSave, revealControls = true }: { token: MapToken; onSave: (sheet: MonsterSheet) => Promise<void>; revealControls?: boolean }) {
   const [draft, setDraft] = useState(() => normalizeMonsterSheet(token.monsterSheet));
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -49,10 +49,10 @@ export function MonsterSheetEditor({ token, onSave }: { token: MapToken; onSave:
   return <div className="monster-sheet-editor">
     <div className="monster-core-fields">
       <label>Nível<input type="number" min="0" max="999" value={draft.level} onChange={(event) => setDraft({ ...draft, level: Number(event.target.value) })} /></label>
-      <button className={isMonsterFieldRevealed(draft, "level") ? "revealed" : ""} type="button" onClick={() => void toggle("level")} title="Alternar revelação do nível">{isMonsterFieldRevealed(draft, "level") ? <Eye size={14} /> : <EyeOff size={14} />}</button>
+      {revealControls ? <button className={isMonsterFieldRevealed(draft, "level") ? "revealed" : ""} type="button" onClick={() => void toggle("level")} title="Alternar revelação do nível">{isMonsterFieldRevealed(draft, "level") ? <Eye size={14} /> : <EyeOff size={14} />}</button> : <span />}
       <label>Vida atual<input type="number" min="0" value={draft.hp} onChange={(event) => setDraft({ ...draft, hp: Number(event.target.value) })} /></label>
       <label>Vida máxima<input type="number" min="1" value={draft.maxHp} onChange={(event) => setDraft({ ...draft, maxHp: Number(event.target.value) })} /></label>
-      <button className={isMonsterFieldRevealed(draft, "health") ? "revealed" : ""} type="button" onClick={() => void toggle("health")} title="Alternar revelação da vida">{isMonsterFieldRevealed(draft, "health") ? <Eye size={14} /> : <EyeOff size={14} />}</button>
+      {revealControls ? <button className={isMonsterFieldRevealed(draft, "health") ? "revealed" : ""} type="button" onClick={() => void toggle("health")} title="Alternar revelação da vida">{isMonsterFieldRevealed(draft, "health") ? <Eye size={14} /> : <EyeOff size={14} />}</button> : <span />}
     </div>
 
     {groups.map((group) => <section className="monster-detail-group" key={group.kind}>
@@ -63,7 +63,7 @@ export function MonsterSheetEditor({ token, onSave }: { token: MapToken; onSave:
         return <article key={detail.id}>
           <input aria-label={`Nome de ${group.label.toLowerCase()}`} value={detail.label} onChange={(event) => updateDetail(group.key, detail.id, { label: event.target.value })} />
           <textarea aria-label={`Descrição de ${detail.label}`} value={detail.value} onChange={(event) => updateDetail(group.key, detail.id, { value: event.target.value })} />
-          <button className={revealed ? "revealed" : ""} type="button" onClick={() => void toggle(field)} title={revealed ? "Ocultar dos jogadores" : "Revelar aos jogadores"}>{revealed ? <Eye size={14} /> : <EyeOff size={14} />}</button>
+          {revealControls ? <button className={revealed ? "revealed" : ""} type="button" onClick={() => void toggle(field)} title={revealed ? "Ocultar dos jogadores" : "Revelar aos jogadores"}>{revealed ? <Eye size={14} /> : <EyeOff size={14} />}</button> : <span />}
           <button className="danger" type="button" onClick={() => setDraft((current) => ({ ...current, [group.key]: current[group.key].filter((item) => item.id !== detail.id), revealedFields: current.revealedFields.filter((item) => item !== field) }))}><Trash2 size={14} /></button>
         </article>;
       })}

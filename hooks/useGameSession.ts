@@ -20,11 +20,12 @@ import {
 } from "firebase/firestore";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveRoll, rollOne } from "@/lib/dice";
+import { normalizeCreature } from "@/lib/creature";
 import { db, isFirebaseConfigured } from "@/lib/firebase";
 import { normalizeMapAsset, orderMapAssets } from "@/lib/map-assets";
 import { normalizeMonsterSheet, publicMonsterSheet } from "@/lib/monster-sheet";
 import { DEFAULT_SHEET_TEMPLATE, normalizeSheetTemplate } from "@/lib/sheet-template";
-import type { AppUser, CampaignJournal, CampaignMember, CampaignMusic, Character, CharacterNotes, ChatMessage, DiceRoll, DiceValidationMode, FogArea, InitiativeState, LightSource, MapAsset, MapToken, MonsterSheet, NpcRecord, Scene, SheetTemplate } from "@/lib/types";
+import type { AppUser, CampaignJournal, CampaignMember, CampaignMusic, Character, CharacterNotes, ChatMessage, CreatureRecord, DiceRoll, DiceValidationMode, FogArea, InitiativeState, LightSource, MapAsset, MapToken, MonsterSheet, NpcRecord, Scene, SheetTemplate } from "@/lib/types";
 
 function blankCharacter(user: AppUser): Character {
   return {
@@ -102,6 +103,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
   const [tokens, setTokens] = useState<MapToken[]>([]);
   const [privateMonsterSheets, setPrivateMonsterSheets] = useState<Record<string, MonsterSheet>>({});
   const [assets, setAssets] = useState<MapAsset[]>([]);
+  const [creatures, setCreatures] = useState<CreatureRecord[]>([]);
   const [npcs, setNpcs] = useState<NpcRecord[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [whisperMessages, setWhisperMessages] = useState<ChatMessage[]>([]);
@@ -131,6 +133,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
     setTokens([]);
     setPrivateMonsterSheets({});
     setAssets([]);
+    setCreatures([]);
     setNpcs([]);
     setChatMessages([]);
     setWhisperMessages([]);
@@ -342,6 +345,21 @@ export function useGameSession(campaignId: string, user: AppUser) {
         updatedAt: item.data().updatedAt?.toMillis?.() ?? undefined,
       }) as NpcRecord)),
       () => setSyncError("O catálogo de NPCs não pôde ser sincronizado."),
+    );
+  }, [campaignId, isGM, online]);
+
+  useEffect(() => {
+    setCreatures([]);
+    if (!isGM || !online || !db || !campaignId) return;
+    return onSnapshot(
+      query(collection(db, "campaigns", campaignId, "creatures"), orderBy("name")),
+      (snapshot) => setCreatures(snapshot.docs.map((item) => normalizeCreature({
+        id: item.id,
+        ...item.data(),
+        createdAt: item.data().createdAt?.toMillis?.() ?? undefined,
+        updatedAt: item.data().updatedAt?.toMillis?.() ?? undefined,
+      } as CreatureRecord))),
+      () => setSyncError("O bestiário da campanha não pôde ser sincronizado."),
     );
   }, [campaignId, isGM, online]);
 
@@ -647,6 +665,31 @@ export function useGameSession(campaignId: string, user: AppUser) {
     if (online && db) await deleteDoc(doc(db, "campaigns", campaignId, "npcs", npcId));
   }, [campaignId, gmId, online, user.id]);
 
+  const saveCreature = useCallback(async (creature: CreatureRecord) => {
+    if (gmId !== user.id) throw new Error("Somente o mestre pode editar o bestiário.");
+    const existing = creatures.find((item) => item.id === creature.id);
+    const saved = normalizeCreature({
+      ...creature,
+      createdAt: existing?.createdAt ?? creature.createdAt ?? Date.now(),
+      updatedAt: Date.now(),
+    });
+    setCreatures((current) => [...current.filter((item) => item.id !== saved.id), saved].sort((left, right) => left.name.localeCompare(right.name, "pt-BR")));
+    if (online && db) {
+      const { createdAt: _createdAt, updatedAt: _updatedAt, ...payload } = saved;
+      await setDoc(doc(db, "campaigns", campaignId, "creatures", saved.id), {
+        ...payload,
+        ...(existing ? {} : { createdAt: serverTimestamp() }),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    }
+  }, [campaignId, creatures, gmId, online, user.id]);
+
+  const deleteCreature = useCallback(async (creatureId: string) => {
+    if (gmId !== user.id) throw new Error("Somente o mestre pode remover criaturas do bestiário.");
+    setCreatures((current) => current.filter((creature) => creature.id !== creatureId));
+    if (online && db) await deleteDoc(doc(db, "campaigns", campaignId, "creatures", creatureId));
+  }, [campaignId, gmId, online, user.id]);
+
   const sendChatMessage = useCallback(async (text: string, image?: { imageUrl: string; driveFileId: string }, spoiler = false, recipient?: CampaignMember, mentionIds: string[] = []) => {
     const cleanText = text.trim().slice(0, 2000);
     if (!cleanText && !image) return;
@@ -787,7 +830,7 @@ export function useGameSession(campaignId: string, user: AppUser) {
   [isGM, privateMonsterSheets, tokens]);
 
   return useMemo(() => ({
-    character, characters, hasCharacter, rolls, tokens: sessionTokens, assets, npcs, scene, journal, music, initiative, sheetTemplate, chatMessages, whisperMessages, notes, participants, isGM, online, syncError,
-    saveCharacter, assignCharacter, rollDie, moveToken, toggleTokenLock, addToken, updateMonsterSheet, removeToken, setTokenHidden, saveAsset, moveAsset, deleteAsset, saveScene, setPlayerScenePresence, clearRevealed, commitRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, editChatMessage, deleteChatMessage, setTyping, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveInitiative, saveNpc, deleteNpc, saveMusic, updateMusicPlayback,
-  }), [addToken, assets, assignCharacter, character, characters, chatMessages, clearChat, clearRevealed, commitRevealed, createLight, deleteAsset, deleteChatMessage, deleteLight, deleteNpc, editChatMessage, hasCharacter, initiative, isGM, journal, moveAsset, moveLight, moveToken, music, npcs, notes, online, participants, removeToken, rollDie, rolls, saveAsset, saveCharacter, saveInitiative, saveJournal, saveMusic, saveNotes, saveNpc, saveScene, saveSheetTemplate, scene, sendChatMessage, sessionTokens, setGlobalVision, setPlayerScenePresence, setTokenHidden, setTokenVision, setTyping, sheetTemplate, syncError, toggleTokenLock, updateLight, updateMonsterSheet, updateMusicPlayback, whisperMessages]);
+    character, characters, hasCharacter, rolls, tokens: sessionTokens, assets, creatures, npcs, scene, journal, music, initiative, sheetTemplate, chatMessages, whisperMessages, notes, participants, isGM, online, syncError,
+    saveCharacter, assignCharacter, rollDie, moveToken, toggleTokenLock, addToken, updateMonsterSheet, removeToken, setTokenHidden, saveAsset, moveAsset, deleteAsset, saveScene, setPlayerScenePresence, clearRevealed, commitRevealed, moveLight, createLight, updateLight, deleteLight, setGlobalVision, setTokenVision, sendChatMessage, editChatMessage, deleteChatMessage, setTyping, clearChat, saveNotes, saveJournal, saveSheetTemplate, saveInitiative, saveNpc, deleteNpc, saveCreature, deleteCreature, saveMusic, updateMusicPlayback,
+  }), [addToken, assets, assignCharacter, character, characters, chatMessages, clearChat, clearRevealed, commitRevealed, createLight, creatures, deleteAsset, deleteChatMessage, deleteCreature, deleteLight, deleteNpc, editChatMessage, hasCharacter, initiative, isGM, journal, moveAsset, moveLight, moveToken, music, npcs, notes, online, participants, removeToken, rollDie, rolls, saveAsset, saveCharacter, saveCreature, saveInitiative, saveJournal, saveMusic, saveNotes, saveNpc, saveScene, saveSheetTemplate, scene, sendChatMessage, sessionTokens, setGlobalVision, setPlayerScenePresence, setTokenHidden, setTokenVision, setTyping, sheetTemplate, syncError, toggleTokenLock, updateLight, updateMonsterSheet, updateMusicPlayback, whisperMessages]);
 }

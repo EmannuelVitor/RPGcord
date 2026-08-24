@@ -173,6 +173,9 @@ html[data-theme="dark"] .light-preview-tag { background:#4a3a1c;color:#f0d9a6; }
 .asset-fields { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px; }
 .asset-fields label { min-width:0;margin:0!important; }
 .asset-fields .wide { grid-column:1/-1; }
+.asset-image-upload { position:relative;min-height:48px;display:flex!important;flex-direction:row!important;align-items:center;gap:9px;padding:8px 10px;border:1px dashed #b7a7dc;border-radius:8px;background:var(--tint-violet);color:var(--forest-2)!important;cursor:pointer; }
+.asset-image-upload > span { min-width:0;flex:1; }.asset-image-upload strong,.asset-image-upload small { display:block;text-transform:none;letter-spacing:0; }.asset-image-upload small { margin-top:2px;color:var(--muted);font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.asset-image-upload input { position:absolute;width:1px;height:1px;padding:0;opacity:0;pointer-events:none; }
 .asset-list { display:grid;gap:8px; }
 .asset-row { overflow:hidden;border:1px solid var(--line);border-radius:9px;background:var(--field); }
 .asset-row.hidden { opacity:.82; }
@@ -226,9 +229,33 @@ html[data-theme="dark"] .light-preview-tag { background:#4a3a1c;color:#f0d9a6; }
 .monster-health { padding:9px 10px;border-bottom:1px solid var(--line); }.monster-health p { display:flex;align-items:center;gap:5px;margin:0 0 6px;color:var(--muted);font-size:10px; }.monster-health p span { flex:1; }.monster-health p b { color:var(--ink); }.monster-health > i { display:block;height:5px;overflow:hidden;border-radius:99px;background:var(--sage); }.monster-health > i em { display:block;height:100%;background:linear-gradient(90deg,#9f424c,#d76868);transition:width .2s; }
 .monster-combat-card > section { padding:9px 10px;border-bottom:1px solid var(--line); }.monster-combat-card > section:last-child { border-bottom:0; }.monster-combat-card h4 { display:flex;align-items:center;gap:5px;margin:0 0 6px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em; }.monster-combat-card > section > div { display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr) 27px;align-items:center;gap:6px;padding:5px 0;border-top:1px dotted var(--line); }.monster-combat-card > section > div:first-of-type { border-top:0; }.monster-combat-card > section > div span,.monster-combat-card > section > div strong { min-width:0;font-size:10px;overflow-wrap:anywhere; }.monster-combat-card > section > div span { color:var(--muted); }.monster-combat-card > section > div.hidden { opacity:.72; }.monster-group-empty { margin:0;color:var(--muted);font-size:10px;font-style:italic; }
 
+/* Preparação persistente da mesa e bestiário reutilizável. */
+.table-preparation-drawer { width:min(900px,100%); }
+.table-preparation-drawer > header h2 { display:flex;align-items:center;gap:8px; }
+.creature-library-section { padding-top:4px; }
+.creature-toolbar { display:flex;align-items:center;gap:8px;margin:10px 0; }
+.creature-toolbar > label { height:38px;display:flex;flex:1;flex-direction:row;align-items:center;gap:7px;margin:0;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--field); }
+.creature-toolbar > label input { height:auto;padding:0;border:0;background:transparent;box-shadow:none!important; }
+.creature-toolbar > button { flex:none; }
+.creature-library-layout { min-height:430px;display:grid;grid-template-columns:230px minmax(0,1fr);overflow:hidden;border:1px solid var(--line);border-radius:10px; }
+.creature-catalog { overflow-y:auto;border-right:1px solid var(--line);background:var(--sage); }
+.creature-catalog > button { width:100%;display:flex;align-items:center;gap:8px;padding:9px 10px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);text-align:left; }
+.creature-catalog > button:hover,.creature-catalog > button.active { background:var(--panel); }.creature-catalog > button.active { box-shadow:inset 3px 0 var(--forest-2); }
+.creature-catalog > button > span { width:34px;height:34px;display:grid;place-items:center;flex:none;overflow:hidden;border-radius:50%;color:#fff;font-size:10px;font-weight:800; }.creature-catalog > button > span img { width:100%;height:100%;object-fit:cover; }
+.creature-catalog > button > div { min-width:0; }.creature-catalog strong,.creature-catalog small { display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }.creature-catalog strong { font-size:10px; }.creature-catalog small { margin-top:3px;color:var(--muted);font-size:10px; }
+.creature-catalog > p { padding:24px 12px;color:var(--muted);font-size:10px;line-height:1.5;text-align:center; }
+.creature-editor { min-width:0;padding:14px;background:var(--paper); }
+.creature-identity { display:grid;grid-template-columns:minmax(0,1fr) 90px;gap:9px; }.creature-identity label { margin:0!important; }.creature-identity .wide { grid-column:1/-1; }
+.creature-identity-actions { display:flex;align-items:center;justify-content:flex-end;gap:7px;margin:10px 0; }.creature-identity-actions > span { margin-right:auto;color:var(--red);font-size:10px;font-weight:700; }
+.danger-text-button,.text-link-button { display:flex;align-items:center;gap:5px;padding:7px;border:0;background:transparent;font-size:10px;font-weight:700; }.danger-text-button { margin-right:auto;color:var(--red); }.text-link-button { margin:8px auto 0;color:var(--forest-2); }
+.creature-editor-empty { min-height:380px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--muted);text-align:center; }.creature-editor-empty strong { color:var(--ink);font:400 18px var(--font-display); }.creature-editor-empty span { max-width:290px;font-size:10px;line-height:1.5; }
+.creature-library-callout { display:flex;align-items:center;gap:9px;padding:12px;border:1px dashed #b7a7dc;border-radius:9px;background:var(--tint-violet); }.creature-library-callout svg { flex:none;color:var(--forest-2); }.creature-library-callout strong,.creature-library-callout span { display:block; }.creature-library-callout strong { font-size:11px; }.creature-library-callout span { margin-top:3px;color:var(--muted);font-size:10px;line-height:1.45; }
+
 @media (max-width:600px) {
   .asset-fields { grid-template-columns:1fr; }.asset-fields .wide { grid-column:auto; }
   .monster-core-fields { grid-template-columns:1fr 30px 1fr 1fr 30px; }
   .monster-detail-group article { grid-template-columns:1fr 32px 32px; }.monster-detail-group article textarea { grid-column:1/-1;grid-row:2; }
   .scene-away { min-height:360px;height:52vh; }
+  .creature-toolbar { align-items:stretch;flex-direction:column; }.creature-toolbar > button { justify-content:center; }
+  .creature-library-layout { grid-template-columns:1fr; }.creature-catalog { max-height:190px;border-right:0;border-bottom:1px solid var(--line); }
 }

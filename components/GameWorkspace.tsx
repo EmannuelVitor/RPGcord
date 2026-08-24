@@ -9,6 +9,7 @@ import {
   HelpCircle,
   LogOut,
   LockKeyhole,
+  Library,
   Menu,
   MessageCircle,
   Music2,
@@ -49,13 +50,14 @@ import { PlayerNotes } from "@/components/PlayerNotes";
 import { SessionChat } from "@/components/SessionChat";
 import { SectionErrorBoundary } from "@/components/SectionErrorBoundary";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { TablePreparationPanel } from "@/components/TablePreparationPanel";
 import { useGameSession } from "@/hooks/useGameSession";
 import { useResizablePanels } from "@/hooks/useResizablePanels";
 import { characterNameOf, composeName, isOnline } from "@/lib/display-name";
 import { isUserInScene } from "@/lib/scene-presence";
 import type { AppUser, Campaign, CampaignMember } from "@/lib/types";
 
-type PanelKey = "sheet" | "history" | "chat" | "journal" | "notes" | "initiative" | "npcs" | "settings" | "gm";
+type PanelKey = "sheet" | "history" | "chat" | "journal" | "notes" | "initiative" | "npcs" | "settings" | "gm" | "table";
 type WhisperTabKey = `whisper:${string}`;
 type WorkspaceTabKey = PanelKey | WhisperTabKey;
 
@@ -77,6 +79,7 @@ const panelLabels: Record<PanelKey, string> = {
   npcs: "NPCs",
   settings: "Configurações",
   gm: "Mestre",
+  table: "Mesa",
 };
 
 const panelIcons: Record<PanelKey, typeof ScrollText> = {
@@ -89,6 +92,7 @@ const panelIcons: Record<PanelKey, typeof ScrollText> = {
   npcs: UsersRound,
   settings: Settings,
   gm: Crown,
+  table: Library,
 };
 
 function playChatNotification() {
@@ -286,7 +290,8 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
     if (panel === "initiative") return <InitiativeTracker embedded initiative={game.initiative} tokens={game.tokens} isGM={game.isGM} onSave={game.saveInitiative} onUpdateMonsterSheet={game.updateMonsterSheet} onClose={() => closePanel("initiative")} />;
     if (panel === "npcs" && game.isGM) return <NpcManager embedded campaignId={campaign.id} npcs={game.npcs} onSave={game.saveNpc} onDelete={game.deleteNpc} onClose={() => closePanel("npcs")} />;
     if (panel === "settings") return <SettingsPanel embedded appearance={appearance} onClose={() => closePanel("settings")} />;
-    if (panel === "gm" && game.isGM) return <GameMasterPanel embedded campaignId={campaign.id} scene={game.scene} tokens={game.tokens} assets={game.assets} sheetTemplate={game.sheetTemplate} ownerId={user.id} onSaveScene={game.saveScene} onSaveSheetTemplate={game.saveSheetTemplate} onAddToken={game.addToken} onRemoveToken={game.removeToken} onSetTokenHidden={game.setTokenHidden} onUpdateMonsterSheet={game.updateMonsterSheet} onSaveAsset={game.saveAsset} onDeleteAsset={game.deleteAsset} onClose={() => closePanel("gm")} />;
+    if (panel === "gm" && game.isGM) return <GameMasterPanel embedded campaignId={campaign.id} scene={game.scene} tokens={game.tokens} assets={game.assets} creatures={game.creatures} ownerId={user.id} onSaveScene={game.saveScene} onAddToken={game.addToken} onRemoveToken={game.removeToken} onSetTokenHidden={game.setTokenHidden} onUpdateMonsterSheet={game.updateMonsterSheet} onSaveAsset={game.saveAsset} onDeleteAsset={game.deleteAsset} onOpenTable={() => openPanel("table")} onClose={() => closePanel("gm")} />;
+    if (panel === "table" && game.isGM) return <TablePreparationPanel embedded campaignId={campaign.id} creatures={game.creatures} sheetTemplate={game.sheetTemplate} onSaveCreature={game.saveCreature} onDeleteCreature={game.deleteCreature} onSaveSheetTemplate={game.saveSheetTemplate} onClose={() => closePanel("table")} />;
     return null;
   }
 
@@ -305,7 +310,7 @@ export function GameWorkspace({ user, campaign, onCampaigns, onLeaveCampaign, on
           <button onClick={() => openPanel("chat")}><MessageCircle /> Chat da sessão {totalUnread > 0 ? <span>{totalUnread}</span> : null}</button>
           <button onClick={openMusic}><Music2 /> Música da campanha</button>
           <p className="nav-group">Combate</p><button onClick={() => openPanel("initiative")}><Swords /> Iniciativa</button>
-          {game.isGM ? <><p className="nav-group">Mestre</p><button onClick={() => openPanel("gm")}><Crown /> Preparar cena</button><button onClick={() => openPanel("npcs")}><UsersRound /> Gerenciar NPCs</button><button onClick={() => { setInviteOpen(true); setSidebarOpen(false); }}><UserPlus /> Convidar jogadores</button></> : null}
+          {game.isGM ? <><p className="nav-group">Mestre</p><button onClick={() => openPanel("gm")}><Crown /> Preparar cena</button><button onClick={() => openPanel("table")}><Library /> Preparar mesa</button><button onClick={() => openPanel("npcs")}><UsersRound /> Gerenciar NPCs</button><button onClick={() => { setInviteOpen(true); setSidebarOpen(false); }}><UserPlus /> Convidar jogadores</button></> : null}
         </nav>
         <div className="sidebar-bottom">
           <button onClick={onTutorial}><HelpCircle /> Ajuda</button><button onClick={() => openPanel("settings")}><Settings /> Configurações</button>

@@ -20,7 +20,7 @@ Produção: <https://rpgcord.vercel.app>
   mestre e fontes de luz com raio intenso, raio difuso, cor e intensidade;
 - pré-visualização ao vivo da luz enquanto ela é ajustada;
 - assets de cenário em camadas, com posição, rotação, bloqueio, ocultação manual
-  e integração opcional à névoa de guerra;
+  e integração opcional à névoa de guerra, por link ou upload direto;
 - pinos identificados como `Personagem (Jogador)`, com seletor de exibição;
 - limite opcional de movimento para os jogadores;
 - presença por cena: o Mestre pode ocultar temporariamente o mapa e o pino de
@@ -31,6 +31,7 @@ Produção: <https://rpgcord.vercel.app>
   contador, caixa de seleção e texto rico;
 - registro extensível de sistemas, aplicação de modelos e importação/exportação
   de fichas estruturadas em JSON;
+- área `Preparar mesa` com modelo de ficha e bestiário reutilizável da campanha;
 - catálogo privado de NPCs com fichas narrativas simplificadas;
 - fichas de criaturas vinculadas ao combate, com nível, vida, atributos,
   fraquezas e habilidades revelados individualmente pelo Mestre;
@@ -91,6 +92,7 @@ campaigns/{campaignId}
   tokens/{tokenId}        pinos de heróis e criaturas
   monsterSheets/{tokenId} ficha completa da criatura, privada do Mestre
   assets/{assetId}        imagens posicionáveis e camadas do mapa
+  creatures/{creatureId} bestiário reutilizável e privado do Mestre
   npcs/{npcId}            catálogo privado de personagens não jogáveis
   scenes/active           mapa, névoa, luzes, limites e presença por cena
   dicerolls/{rollId}      histórico de rolagens

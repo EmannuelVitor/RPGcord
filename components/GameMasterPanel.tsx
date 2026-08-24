@@ -1,37 +1,35 @@
 "use client";
 
-import { Boxes, ChevronDown, Eye, EyeOff, Lightbulb, Map, Moon, Plus, Save, ScrollText, Trash2, X } from "lucide-react";
+import { Boxes, ChevronDown, Eye, EyeOff, Library, Lightbulb, Map, Moon, Plus, Save, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { MapAssetManager } from "@/components/MapAssetManager";
 import { MonsterSheetEditor } from "@/components/MonsterSheets";
+import { tokenFromCreature } from "@/lib/creature";
 import { toDirectDriveUrl } from "@/lib/drive";
-import { DEFAULT_MONSTER_SHEET } from "@/lib/monster-sheet";
-import { SheetTemplateEditor } from "@/components/SheetTemplateEditor";
-import type { MapAsset, MapToken, MonsterSheet, Scene, SheetTemplate } from "@/lib/types";
+import type { CreatureRecord, MapAsset, MapToken, MonsterSheet, Scene } from "@/lib/types";
 
 type Props = {
   campaignId: string;
   scene: Scene;
   tokens: MapToken[];
   assets: MapAsset[];
-  sheetTemplate: SheetTemplate;
+  creatures: CreatureRecord[];
   ownerId: string;
   onSaveScene: (scene: Scene) => Promise<void>;
-  onSaveSheetTemplate: (template: SheetTemplate) => Promise<void>;
   onAddToken: (token: MapToken) => Promise<void>;
   onRemoveToken: (id: string) => Promise<void>;
   onSetTokenHidden: (id: string, hidden: boolean) => Promise<void>;
   onUpdateMonsterSheet: (id: string, sheet: MonsterSheet) => Promise<void>;
   onSaveAsset: (asset: MapAsset) => Promise<void>;
   onDeleteAsset: (id: string) => Promise<void>;
+  onOpenTable: () => void;
   embedded?: boolean;
   onClose: () => void;
 };
 
-export function GameMasterPanel({ campaignId, scene, tokens, assets, sheetTemplate, ownerId, embedded = false, onSaveScene, onSaveSheetTemplate, onAddToken, onRemoveToken, onSetTokenHidden, onUpdateMonsterSheet, onSaveAsset, onDeleteAsset, onClose }: Props) {
+export function GameMasterPanel({ campaignId, scene, tokens, assets, creatures, ownerId, embedded = false, onSaveScene, onAddToken, onRemoveToken, onSetTokenHidden, onUpdateMonsterSheet, onSaveAsset, onDeleteAsset, onOpenTable, onClose }: Props) {
   const [draft, setDraft] = useState(scene);
-  const [tokenName, setTokenName] = useState("");
-  const [tokenImage, setTokenImage] = useState("");
+  const [selectedCreatureId, setSelectedCreatureId] = useState("");
   const [newLightDim, setNewLightDim] = useState(16);
   const [newLightBright, setNewLightBright] = useState(8);
   const [expandedMonsterId, setExpandedMonsterId] = useState<string>();
@@ -80,21 +78,14 @@ export function GameMasterPanel({ campaignId, scene, tokens, assets, sheetTempla
   }
 
   async function createToken() {
-    if (!tokenName.trim()) return;
-    const token: MapToken = {
-      id: crypto.randomUUID(), ownerId, name: tokenName.trim(),
-      initials: tokenName.trim().split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
-      x: 50, y: 40, color: "#b75252", imageUrl: toDirectDriveUrl(tokenImage, campaignId), kind: "monster", hidden: false,
-      monsterSheet: { ...DEFAULT_MONSTER_SHEET, attributes: [], weaknesses: [], abilities: [], revealedFields: [] },
-    };
-    await onAddToken(token);
-    setTokenName("");
-    setTokenImage("");
+    const creature = creatures.find((item) => item.id === selectedCreatureId);
+    if (!creature) return;
+    await onAddToken(tokenFromCreature(creature, ownerId));
   }
 
   return <div className={"drawer-backdrop" + (embedded ? " embedded" : "")} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
     <aside className="drawer gm-drawer">
-      <header><div><p className="eyebrow">Ferramentas do mestre</p><h2>Configurar campanha</h2></div><button className="icon-button" onClick={onClose} aria-label="Fechar"><X size={20} /></button></header>
+      <header><div><p className="eyebrow">Ferramentas do mestre</p><h2>Preparar cena</h2></div><button className="icon-button" onClick={onClose} aria-label="Fechar"><X size={20} /></button></header>
       <form onSubmit={saveScene}>
         <section className="gm-section">
           <h3><Map size={17} /> Mapa ativo</h3>
@@ -152,14 +143,11 @@ export function GameMasterPanel({ campaignId, scene, tokens, assets, sheetTempla
         <MapAssetManager campaignId={campaignId} assets={assets} onSave={onSaveAsset} onDelete={onDeleteAsset} />
       </section>
 
-      <section className="gm-section sheet-model-section"><h3><ScrollText size={17} /> Modelo de ficha da campanha</h3><SheetTemplateEditor template={sheetTemplate} onSave={onSaveSheetTemplate} /></section>
-
       <section className="gm-section">
-        <h3><Plus size={17} /> Adicionar criatura</h3>
-        <label>Nome<input placeholder="Ex.: Sentinela goblin" value={tokenName} onChange={(event) => setTokenName(event.target.value)} /></label>
-        <label>Imagem opcional<input placeholder="Link do Google Drive" value={tokenImage} onChange={(event) => setTokenImage(event.target.value)} /></label>
-        <button className="secondary-button full" onClick={() => void createToken()}><Plus size={16} /> Colocar no mapa</button>
-<p className="field-help">Criaturas ocultas aparecem só para você, esmaecidas no mapa. Revele-as quando o grupo encontrá-las.</p>
+        <h3><Plus size={17} /> Colocar criatura na cena</h3>
+        {creatures.length ? <><label>Bestiário da campanha<select value={selectedCreatureId} onChange={(event) => setSelectedCreatureId(event.target.value)}><option value="">Selecione uma criatura</option>{creatures.map((creature) => <option value={creature.id} key={creature.id}>{creature.name}</option>)}</select></label><button className="secondary-button full" disabled={!selectedCreatureId} onClick={() => void createToken()}><Plus size={16} /> Colocar no centro do mapa</button></> : <div className="creature-library-callout"><Library size={20} /><div><strong>Seu bestiário está vazio</strong><span>Cadastre criaturas em Preparar mesa para reutilizá-las em qualquer cena.</span></div></div>}
+        <button className="text-link-button" type="button" onClick={onOpenTable}><Library size={14} /> Abrir bestiário em Preparar mesa</button>
+        <p className="field-help">Cada criatura colocada recebe uma cópia independente da ficha. Revelações e dano desta cena não alteram o bestiário.</p>
         <div className="token-list monster-token-list">{tokens.filter((token) => token.kind === "monster").map((token) => <article className={expandedMonsterId === token.id ? "expanded" : ""} key={token.id}>
           <div className="monster-token-summary"><span className="mini-token" style={{ background: token.color }}>{token.imageUrl ? <img src={token.imageUrl} alt="" /> : token.initials}</span><strong>{token.name}</strong><button className="monster-sheet-toggle" type="button" onClick={() => setExpandedMonsterId((current) => current === token.id ? undefined : token.id)} aria-expanded={expandedMonsterId === token.id} aria-label={`Editar ficha de ${token.name}`}><ChevronDown size={15} /></button><button className={token.hidden ? "token-hidden-toggle active" : "token-hidden-toggle"} type="button" onClick={() => void onSetTokenHidden(token.id, !token.hidden)} title={token.hidden ? "Revelar para os jogadores" : "Ocultar dos jogadores"} aria-label={(token.hidden ? "Revelar " : "Ocultar ") + token.name}>{token.hidden ? <EyeOff size={15} /> : <Eye size={15} />}</button><button type="button" onClick={() => { setExpandedMonsterId((current) => current === token.id ? undefined : current); void onRemoveToken(token.id); }} aria-label={"Remover " + token.name}><Trash2 size={15} /></button></div>
           {expandedMonsterId === token.id ? <MonsterSheetEditor token={token} onSave={(sheet) => onUpdateMonsterSheet(token.id, sheet)} /> : null}

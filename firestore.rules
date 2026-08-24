@@ -202,6 +202,12 @@ service cloud.firestore {
         allow read, create, update, delete: if isOwner(campaignId);
       }
 
+      // Bestiário reutilizável: as fichas completas pertencem à preparação do
+      // Mestre e só viram projeções públicas quando instanciadas como pinos.
+      match /creatures/{creatureId} {
+        allow read, create, update, delete: if isOwner(campaignId);
+      }
+
       // A ficha completa nunca acompanha o pino público. O documento do pino
       // recebe apenas a projeção dos campos que o mestre decidiu revelar.
       match /monsterSheets/{tokenId} {
